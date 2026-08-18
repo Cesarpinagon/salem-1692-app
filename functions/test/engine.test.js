@@ -147,8 +147,51 @@ test('el mazo contiene exactamente una Conspiracion y dos cartas de Casamiento',
     const deck = buildTownDeck(playerCount);
     assert.equal(deck.filter((card) => card.key === 'CONSPIRACY').length, 1);
     assert.equal(deck.filter((card) => card.key === 'MATCHMAKER').length, 2);
+    assert.equal(deck.filter((card) => card.key === 'NIGHT').length, 0);
     assert.equal(new Set(deck.map((card) => card.id)).size, deck.length);
   }
+});
+
+test('la Noche no comienza mientras queden cartas en el mazo principal', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  game.deck = [
+    { id: 'legacy_night', key: 'NIGHT', name: 'Noche', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'NONE' },
+    { id: 'normal_draw', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+    { id: 'still_in_deck', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+  ];
+  game = act(game, actor, ACTION.DRAW_CARDS);
+  assert.equal(game.phase, GAME_STATUS.DAY);
+  assert.equal(game.deck.length, 1);
+  assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 0);
+});
+
+test('la Noche comienza exactamente al robar la ultima carta del mazo principal', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  game.deck = [{ id: 'last_main_card', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' }];
+  game = act(game, actor, ACTION.DRAW_CARDS);
+  assert.equal(game.phase, GAME_STATUS.NIGHT);
+  assert.equal(game.subPhase, SUB_PHASE.WITCH_SELECTION);
+  assert.equal(game.deck.length, 0);
+  assert.deepEqual(game.interruptedTurn, { playerId: actor, remainingDraws: 1 });
+  assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 1);
+});
+
+test('si la ultima carta es Conspiracion, se resuelve antes de comenzar la Noche', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  game.deck = [{ id: 'last_conspiracy', key: 'CONSPIRACY', name: 'Conspiracion', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'TRYAL_CARD' }];
+  game = act(game, actor, ACTION.DRAW_CARDS);
+  assert.equal(game.subPhase, SUB_PHASE.CONSPIRACY_RESOLUTION);
+  assert.equal(game.pendingNightAfterDraw, true);
+  for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) {
+    game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
+  }
+  assert.equal(game.phase, GAME_STATUS.NIGHT);
+  assert.equal(game.subPhase, SUB_PHASE.WITCH_SELECTION);
+  assert.equal(game.pendingNightAfterDraw, false);
+  assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 1);
 });
 
 test('Casamiento vincula dos jugadores y la muerte de uno elimina inmediatamente al otro', () => {
@@ -214,18 +257,15 @@ test('el segundo robo se reanuda despues de resolver Conspiracy', () => {
   assert.equal(game.interruptedTurn, null);
 });
 
-test('si quien robo Noche muere, su robo pendiente se cancela y avanza el turno', () => {
+test('si quien agoto el mazo muere durante la Noche, su robo pendiente se cancela y avanza el turno', () => {
   let game = beginDay(started());
   const actor = game.turnOrder.find((id) => !game.players[id].hasEverBeenWitch);
   const actorIndex = game.turnOrder.indexOf(actor);
   const nextPlayer = game.turnOrder[(actorIndex + 1) % game.turnOrder.length];
   game.currentPlayerId = actor;
   game.turn.index = actorIndex;
-  game.deck = [
-    { id: 'night_interrupt', key: 'NIGHT', name: 'Noche', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'NONE' },
-    { id: 'never_drawn', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
-    ...game.deck,
-  ];
+  game.deck = [{ id: 'last_before_night', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' }];
+  game.discard.unshift({ id: 'never_drawn', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' });
   game = act(game, actor, ACTION.DRAW_CARDS);
   const witches = game.turnOrder.filter((id) => game.players[id].alive && game.players[id].hasEverBeenWitch);
   for (const witch of witches) game = act(game, witch, ACTION.SELECT_WITCH_VICTIM, { targetId: actor }, witch);

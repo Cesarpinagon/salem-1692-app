@@ -46,7 +46,7 @@ export const cardDescription = (card) => card?.description || ({
 export const CARD_GLOSSARY = [
   { name: 'Casamiento', description: 'Permite vincular a dos jugadores. Si cualquiera de los dos muere por cualquier causa, el otro muere automaticamente.' },
   { name: 'Amanecer', description: 'Permite al Alguacil proteger secretamente a un jugador del ataque nocturno de las Brujas.' },
-  { name: 'Noche', description: 'Al robarse, las Brujas despiertan y eligen a una victima para eliminarla.' },
+  { name: 'Noche', description: 'La fase comienza automaticamente cuando un jugador roba la ultima carta del mazo principal.' },
   { name: 'Gato Negro', description: 'Maldice a un jugador y lo obliga a revelar inmediatamente una carta de Juicio.' },
   { name: 'Conspiracion', description: 'Cada jugador toma una carta de Juicio oculta del jugador a su izquierda. Recibir una Bruja te convierte en Bruja.' },
   { name: 'Asilo / Proteccion', description: 'Carta azul permanente que protege contra acusaciones y ataques de la Noche.' },

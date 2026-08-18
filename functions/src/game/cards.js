@@ -15,7 +15,7 @@ export function buildTownDeck(playerCount = 4) {
   const targetSize = Math.max(40, (playerCount * 5) + 20);
   const conspiracy = getCardDefinition('CONSPIRACY');
   const matchmaker = getCardDefinition('MATCHMAKER');
-  const repeatable = DEFINITIONS.filter((card) => !['CONSPIRACY', 'MATCHMAKER'].includes(card.key));
+  const repeatable = DEFINITIONS.filter((card) => !['CONSPIRACY', 'MATCHMAKER', 'NIGHT'].includes(card.key));
   const deck = [
     { ...conspiracy, id: 'CONSPIRACY_UNIQUE' },
     { ...matchmaker, id: 'MATCHMAKER_1' },
