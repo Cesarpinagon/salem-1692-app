@@ -1,0 +1,54 @@
+export const tryalLabel = (type) => ({
+  WITCH: 'Bruja',
+  NOT_WITCH: 'Pueblerino',
+  CONSTABLE: 'Alguacil',
+}[type] || type || 'Desconocida');
+
+export const colorLabel = (color) => ({
+  RED: 'Roja',
+  GREEN: 'Verde',
+  BLUE: 'Azul',
+  BLACK: 'Negra',
+}[color] || color || '');
+
+export const winnerLabel = (winner) => ({
+  TOWN: 'El Pueblo',
+  WITCHES: 'Las Brujas',
+}[winner] || winner || 'Sin ganador');
+
+export const deathReasonLabel = (reason) => ({
+  REVEALED_WITCH: 'revelo su carta de Bruja',
+  CONFESSED_WITCH: 'confeso su carta de Bruja',
+  ALL_TRYALS_REVEALED: 'revelo sus cinco cartas de Juicio',
+  WITCH_ATTACK: 'ataque de las Brujas',
+  MARRIAGE_BOND: 'vinculo mortal de Casamiento',
+}[reason] || 'fallecido');
+
+export const subPhaseLabel = (subPhase) => ({
+  BLACK_CAT_SELECTION: 'Seleccion del Gato Negro',
+  WITCH_SELECTION: 'Seleccion secreta de las Brujas',
+  CONSTABLE_SELECTION: 'Proteccion del Alguacil',
+  CONFESSION: 'Confesion',
+  NIGHT_RESOLUTION: 'Resolucion de la Noche',
+  LAST_WORDS: 'Ultimas palabras',
+}[subPhase] || 'Noche en Salem');
+
+export const cardDescription = (card) => card?.description || ({
+  ACCUSATION: 'Suma puntos de acusacion frente a otro jugador hasta provocar un Juicio.',
+  EVIDENCE: 'Suma 3 puntos de acusacion frente a otro jugador.',
+  WITNESS: 'Suma 7 puntos de acusacion y provoca un Juicio.',
+  ALIBI: 'Retira todas tus acusaciones acumuladas.',
+  ASYLUM: 'Proteccion azul permanente contra acusaciones y ataques de la Noche.',
+  SANCTUARY: 'Proteccion azul permanente contra acusaciones y ataques de la Noche.',
+  MATCHMAKER: 'Vincula a dos jugadores; si uno muere, el otro muere inmediatamente.',
+}[card?.key] || 'Carta de Salem.');
+
+export const CARD_GLOSSARY = [
+  { name: 'Casamiento', description: 'Permite vincular a dos jugadores. Si cualquiera de los dos muere por cualquier causa, el otro muere automaticamente.' },
+  { name: 'Amanecer', description: 'Permite al Alguacil proteger secretamente a un jugador del ataque nocturno de las Brujas.' },
+  { name: 'Noche', description: 'Al robarse, las Brujas despiertan y eligen a una victima para eliminarla.' },
+  { name: 'Gato Negro', description: 'Maldice a un jugador y lo obliga a revelar inmediatamente una carta de Juicio.' },
+  { name: 'Conspiracion', description: 'Cada jugador toma una carta de Juicio oculta del jugador a su izquierda. Recibir una Bruja te convierte en Bruja.' },
+  { name: 'Asilo / Proteccion', description: 'Carta azul permanente que protege contra acusaciones y ataques de la Noche.' },
+  { name: 'Acusaciones', description: 'Las cartas rojas suman puntos frente a un jugador; al llegar a 7 provocan un Juicio.' },
+];

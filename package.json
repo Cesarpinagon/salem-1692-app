@@ -1,0 +1,39 @@
+{
+  "name": "salem-1692-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "test": "node --test functions/test/*.test.js",
+    "test:api": "node scripts/test-vercel-api.mjs",
+    "simulate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/simulate-four-players.ps1",
+    "emulators": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-emulators.ps1",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^12.17.1",
+    "firebase-admin": "^13.10.0",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "autoprefixer": "^10.5.4",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "firebase-tools": "^15.27.0",
+    "globals": "^17.7.0",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.0"
+  }
+}

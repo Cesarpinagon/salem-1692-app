@@ -1,0 +1,7 @@
+.firebase-cli
+.firebase-data
+.env.local
+database-debug.log
+firebase-debug.log
+functions/node_modules
+node_modules

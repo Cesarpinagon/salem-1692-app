@@ -1,0 +1,33 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "games": {
+      "$gameId": {
+        "public": {
+          ".read": "auth != null && root.child('games').child($gameId).child('serverState').child('players').child(auth.uid).child('firebaseUid').val() === auth.uid",
+          ".write": false
+        },
+        "private": {
+          "$playerId": {
+            ".read": "auth != null && $playerId === auth.uid && root.child('games').child($gameId).child('serverState').child('players').child($playerId).child('firebaseUid').val() === auth.uid",
+            ".write": false
+          }
+        },
+        "serverState": {
+          ".read": false,
+          ".write": false
+        }
+      }
+    },
+    "presence": {
+      "$gameId": {
+        ".read": "auth != null && root.child('games').child($gameId).child('serverState').child('players').child(auth.uid).child('firebaseUid').val() === auth.uid",
+        "$playerId": {
+          ".write": "auth != null && auth.uid === $playerId",
+          ".validate": "newData.hasChildren(['connected', 'updatedAt']) && newData.child('connected').isBoolean()"
+        }
+      }
+    }
+  }
+}

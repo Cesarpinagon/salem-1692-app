@@ -1,0 +1,393 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { ACTION, GAME_STATUS, SUB_PHASE, TRYAL } from '../src/game/constants.js';
+import { GameEngine, GameRuleError } from '../src/game/engine.js';
+import { buildTownDeck } from '../src/game/cards.js';
+
+const rng = () => 0.314159;
+
+function lobby() {
+  let game = GameEngine.createGame({ id: 'SALEM', inviteCode: 'SALEM', host: { id: 'p1', firebaseUid: 'u1', name: 'Host' }, now: 1 });
+  for (let n = 2; n <= 4; n += 1) game = GameEngine.addPlayer(game, { id: `p${n}`, firebaseUid: `u${n}`, name: `Player ${n}` }, n);
+  return game;
+}
+
+function act(game, playerId, type, payload = {}, suffix = '') {
+  return GameEngine.executeAction(game, playerId, { actionId: `${type}_${game.version}_${suffix}`, expectedVersion: game.version, type, payload }, { rng, now: 1000 + game.version });
+}
+
+function started() {
+  return act(lobby(), 'p1', ACTION.START_GAME);
+}
+
+function beginDay(game) {
+  const selector = game.turnOrder.find((id) => game.players[id].isCurrentWitch) || 'p1';
+  const target = game.turnOrder.find((id) => id !== selector && game.players[id].tryalCards.some((card) => card.type === TRYAL.NOT_WITCH && !card.revealed));
+  game = act(game, selector, ACTION.SELECT_BLACK_CAT, { targetId: target });
+  const card = game.players[target].tryalCards.find((item) => item.type === TRYAL.NOT_WITCH && !item.revealed);
+  return act(game, target, ACTION.SELECT_TRYAL, { targetId: target, tryalCardId: card.id });
+}
+
+test('solo el host puede iniciar y se exige una cantidad valida', () => {
+  assert.throws(() => act(lobby(), 'p2', ACTION.START_GAME), (error) => error instanceof GameRuleError && error.code === 'HOST_ONLY');
+  let short = GameEngine.createGame({ id: 'X', inviteCode: 'XXXX', host: { id: 'p1', firebaseUid: 'u1', name: 'Host' } });
+  assert.throws(() => act(short, 'p1', ACTION.START_GAME), (error) => error.code === 'INVALID_PLAYER_COUNT');
+});
+
+test('solo el host puede reiniciar una partida terminada y el estado vuelve limpio al lobby', () => {
+  const finished = started();
+  finished.status = GAME_STATUS.FINISHED;
+  finished.phase = GAME_STATUS.FINISHED;
+  finished.subPhase = null;
+  finished.winner = 'TOWN';
+  finished.players.p1.alive = false;
+  finished.players.p2.alive = false;
+  finished.players.p2.connected = false;
+  finished.players.p1.accusations = [{ amount: 7 }];
+  const previousVersion = finished.version;
+  const originalInviteCode = finished.inviteCode;
+
+  assert.throws(() => act(finished, 'p2', ACTION.RESET_GAME), (error) => error.code === 'HOST_ONLY');
+
+  const reset = act(finished, 'p1', ACTION.RESET_GAME);
+  assert.equal(reset.status, GAME_STATUS.LOBBY);
+  assert.equal(reset.phase, GAME_STATUS.LOBBY);
+  assert.equal(reset.winner, null);
+  assert.equal(reset.inviteCode, originalInviteCode);
+  assert.equal(reset.version, previousVersion + 1);
+  assert.deepEqual(reset.deck, []);
+  assert.deepEqual(reset.history, []);
+  assert.deepEqual(reset.players.p1.hand, []);
+  assert.deepEqual(reset.players.p1.tryalCards, []);
+  assert.deepEqual(reset.players.p1.accusations, []);
+  assert.equal(reset.players.p1.alive, true);
+  assert.equal(reset.players.p2.alive, true);
+  assert.equal(reset.players.p2.connected, false);
+  assert.equal(reset.players.p1.isHost, true);
+  assert.deepEqual(GameEngine.buildPlayerView(reset, 'p1').privateState.legalActions, [{ type: ACTION.START_GAME }]);
+});
+
+test('rehidrata arreglos vacios omitidos por Realtime Database al unir jugadores', () => {
+  let game = GameEngine.createGame({ id: 'RTDB', inviteCode: 'RTDB42', host: { id: 'p1', firebaseUid: 'u1', name: 'Host' } });
+  delete game.deck;
+  delete game.discard;
+  delete game.effects;
+  delete game.history;
+  delete game.players.p1.hand;
+  delete game.players.p1.tryalCards;
+  game = GameEngine.addPlayer(game, { id: 'p2', firebaseUid: 'u2', name: 'Player 2' });
+  const view = GameEngine.buildPlayerView(game, 'p2');
+  assert.equal(view.publicState.deckCount, 0);
+  assert.deepEqual(view.privateState.hand, []);
+  assert.equal(Object.keys(view.publicState.players).length, 2);
+});
+
+test('setup asigna roles, conserva hasEverBeenWitch y entra a Dawn', () => {
+  const game = started();
+  assert.equal(game.phase, GAME_STATUS.DAWN);
+  assert.equal(game.turnOrder.filter((id) => game.players[id].isCurrentWitch).length, 1);
+  assert.equal(game.turnOrder.filter((id) => game.players[id].isCurrentConstable).length, 1);
+  const witch = game.turnOrder.find((id) => game.players[id].isCurrentWitch);
+  game.players[witch].tryalCards = game.players[witch].tryalCards.filter((card) => card.type !== TRYAL.WITCH);
+  game.players[witch].isCurrentWitch = false;
+  assert.equal(game.players[witch].hasEverBeenWitch, true);
+});
+
+test('PlayerView nunca filtra manos ni Tryal ocultas ajenas', () => {
+  const game = started();
+  const view = GameEngine.buildPlayerView(game, 'p1');
+  assert.ok(view.privateState.hand.length);
+  assert.ok(view.privateState.tryalCards.length);
+  assert.equal('protectedTonight' in view.privateState, false);
+  Object.values(view.publicState.players).forEach((player) => {
+    assert.equal('hand' in player, false);
+    assert.equal('tryalCards' in player, false);
+    assert.equal('hasEverBeenWitch' in player, false);
+    assert.equal('firebaseUid' in player, false);
+  });
+});
+
+test('una accion duplicada no se ejecuta dos veces y una version obsoleta se rechaza', () => {
+  let game = beginDay(started());
+  const action = { actionId: 'once', expectedVersion: game.version, type: ACTION.END_TURN, payload: {} };
+  const once = GameEngine.executeAction(game, game.currentPlayerId, action, { now: 5000, rng });
+  const twice = GameEngine.executeAction(once, game.currentPlayerId, action, { now: 5001, rng });
+  assert.deepEqual(twice, once);
+  assert.throws(() => GameEngine.executeAction(once, once.currentPlayerId, { ...action, actionId: 'stale' }), (error) => error.code === 'VERSION_CONFLICT');
+});
+
+test('las acusaciones suman sus puntos exactamente una vez', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  game.players[actor].hand.unshift({ id: 'evidence_exact', key: 'EVIDENCE', name: 'Evidencia', color: 'RED', points: 3, trigger: 'ON_PLAY', targetRules: 'OTHER_PLAYER' });
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'evidence_exact', targetId: target });
+  assert.equal(game.players[target].accusationTotal, 3);
+  assert.equal(game.players[target].accusations.length, 1);
+  assert.notEqual(game.subPhase, SUB_PHASE.TRYAL_SELECTION);
+});
+
+test('solo la bruja actual puede asignar Black Cat', () => {
+  const game = started();
+  const nonWitch = game.turnOrder.find((id) => !game.players[id].isCurrentWitch);
+  assert.throws(() => act(game, nonWitch, ACTION.SELECT_BLACK_CAT, { targetId: 'p1' }), (error) => error.code === 'NOT_ALLOWED');
+});
+
+test('el mazo alcanza para repartir cinco cartas a doce jugadores', () => {
+  let game = GameEngine.createGame({ id: 'BIG', inviteCode: 'BIG012', host: { id: 'p1', firebaseUid: 'u1', name: 'Host' }, now: 1 });
+  for (let n = 2; n <= 12; n += 1) game = GameEngine.addPlayer(game, { id: `p${n}`, firebaseUid: `u${n}`, name: `Player ${n}` }, n);
+  game = act(game, 'p1', ACTION.START_GAME);
+  assert.equal(game.turnOrder.length, 12);
+  assert.ok(game.turnOrder.every((id) => game.players[id].hand.length === 5));
+  assert.ok(game.deck.length >= 20);
+});
+
+test('el mazo contiene exactamente una Conspiracion y dos cartas de Casamiento', () => {
+  for (const playerCount of [4, 8, 12]) {
+    const deck = buildTownDeck(playerCount);
+    assert.equal(deck.filter((card) => card.key === 'CONSPIRACY').length, 1);
+    assert.equal(deck.filter((card) => card.key === 'MATCHMAKER').length, 2);
+    assert.equal(new Set(deck.map((card) => card.id)).size, deck.length);
+  }
+});
+
+test('Casamiento vincula dos jugadores y la muerte de uno elimina inmediatamente al otro', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const witch = game.turnOrder.find((id) => game.players[id].tryalCards.some((card) => card.type === TRYAL.WITCH && !card.revealed));
+  const partner = game.turnOrder.find((id) => id !== witch);
+  game.players[actor].hand.unshift({ id: 'matchmaker_test', key: 'MATCHMAKER', name: 'Casamiento', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'TWO_ALIVE_PLAYERS', targetCount: 2 });
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'matchmaker_test', targetIds: [witch, partner] });
+  assert.equal(game.players[witch].marriedTo, partner);
+  assert.equal(game.players[partner].marriedTo, witch);
+
+  game.subPhase = SUB_PHASE.TRYAL_SELECTION;
+  game.pendingActions = { accusedId: witch, accuserId: actor };
+  const witchCard = game.players[witch].tryalCards.find((card) => card.type === TRYAL.WITCH && !card.revealed);
+  game = act(game, actor, ACTION.SELECT_TRYAL, { targetId: witch, tryalCardId: witchCard.id });
+  assert.equal(game.players[witch].alive, false);
+  assert.equal(game.players[partner].alive, false);
+  assert.equal(game.players[partner].deathReason, 'MARRIAGE_BOND');
+  assert.ok(game.history.some((entry) => entry.type === 'MARRIAGE_DEATH'));
+});
+
+test('Asilo es permanente y bloquea acusaciones contra quien lo posee', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  game.players[target].blueCards.push({ id: 'asylum_test', key: 'ASYLUM', name: 'Asilo / Proteccion', color: 'BLUE', duration: 'PERMANENT' });
+  game.players[actor].hand.unshift({ id: 'accusation_blocked', key: 'ACCUSATION', name: 'Acusacion', color: 'RED', points: 1, trigger: 'ON_PLAY', targetRules: 'OTHER_PLAYER' });
+  const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'accusation_blocked');
+  assert.ok(!action.targets.includes(target));
+  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'accusation_blocked', targetId: target }), (error) => error.code === 'INVALID_TARGET');
+  assert.equal(game.players[target].blueCards[0].duration, 'PERMANENT');
+});
+
+test('el Gato Negro obliga al objetivo a revelar inmediatamente una carta de Juicio', () => {
+  let game = started();
+  const witch = game.turnOrder.find((id) => game.players[id].isCurrentWitch);
+  const target = game.turnOrder.find((id) => id !== witch);
+  game = act(game, witch, ACTION.SELECT_BLACK_CAT, { targetId: target });
+  assert.equal(game.subPhase, SUB_PHASE.TRYAL_SELECTION);
+  assert.equal(game.pendingActions.accusedId, target);
+  assert.equal(GameEngine.buildPlayerView(game, witch).privateState.legalActions.some((item) => item.type === ACTION.SELECT_TRYAL), false);
+  assert.equal(GameEngine.buildPlayerView(game, target).privateState.legalActions.some((item) => item.type === ACTION.SELECT_TRYAL), true);
+});
+
+test('el segundo robo se reanuda despues de resolver Conspiracy', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  game.deck = [
+    { id: 'conspiracy_resume', key: 'CONSPIRACY', name: 'Conspiracion', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'TRYAL_CARD' },
+    { id: 'alibi_resume', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+    ...game.deck,
+  ];
+  const nextPlayer = game.turnOrder[(game.turn.index + 1) % game.turnOrder.length];
+  game = act(game, actor, ACTION.DRAW_CARDS);
+  assert.equal(game.subPhase, SUB_PHASE.CONSPIRACY_RESOLUTION);
+  assert.deepEqual(game.interruptedTurn, { playerId: actor, remainingDraws: 1 });
+  for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) {
+    game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
+  }
+  assert.ok(game.players[actor].hand.some((card) => card.id === 'alibi_resume'));
+  assert.equal(game.currentPlayerId, nextPlayer);
+  assert.equal(game.interruptedTurn, null);
+});
+
+test('si quien robo Noche muere, su robo pendiente se cancela y avanza el turno', () => {
+  let game = beginDay(started());
+  const actor = game.turnOrder.find((id) => !game.players[id].hasEverBeenWitch);
+  const actorIndex = game.turnOrder.indexOf(actor);
+  const nextPlayer = game.turnOrder[(actorIndex + 1) % game.turnOrder.length];
+  game.currentPlayerId = actor;
+  game.turn.index = actorIndex;
+  game.deck = [
+    { id: 'night_interrupt', key: 'NIGHT', name: 'Noche', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'NONE' },
+    { id: 'never_drawn', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+    ...game.deck,
+  ];
+  game = act(game, actor, ACTION.DRAW_CARDS);
+  const witches = game.turnOrder.filter((id) => game.players[id].alive && game.players[id].hasEverBeenWitch);
+  for (const witch of witches) game = act(game, witch, ACTION.SELECT_WITCH_VICTIM, { targetId: actor }, witch);
+  const constable = game.turnOrder.find((id) => game.players[id].alive && game.players[id].isCurrentConstable);
+  if (constable) {
+    const protectionTarget = game.turnOrder.find((id) => game.players[id].alive && id !== constable && id !== actor);
+    game = act(game, constable, ACTION.SELECT_CONSTABLE_PROTECTION, { targetId: protectionTarget });
+  }
+  for (const id of game.turnOrder.filter((id) => game.players[id].alive)) game = act(game, id, ACTION.PASS_CONFESSION, {}, id);
+  assert.equal(game.subPhase, SUB_PHASE.LAST_WORDS);
+  game = act(game, actor, ACTION.END_LAST_WORDS);
+  assert.equal(game.phase, GAME_STATUS.DAY);
+  assert.equal(game.subPhase, SUB_PHASE.WAITING_ACTION);
+  assert.equal(game.currentPlayerId, nextPlayer);
+  assert.equal(game.interruptedTurn, null);
+  assert.ok(!game.players[actor].hand.some((card) => card.id === 'never_drawn'));
+});
+
+test('la ronda aumenta al volver al primer jugador vivo', () => {
+  let game = beginDay(started());
+  const startingRound = game.round;
+  const aliveCount = game.turnOrder.filter((id) => game.players[id].alive).length;
+  for (let index = 0; index < aliveCount; index += 1) game = act(game, game.currentPlayerId, ACTION.END_TURN, {}, index);
+  assert.equal(game.round, startingRound + 1);
+});
+
+test('cualquier miembro puede resolver un timeout vencido', () => {
+  let game = beginDay(started());
+  const nonHost = game.turnOrder.find((id) => !game.players[id].isHost);
+  game.timers.phaseEndsAt = 10;
+  game = GameEngine.executeAction(game, nonHost, {
+    actionId: 'timeout_shared', expectedVersion: game.version, type: ACTION.APPLY_TIMEOUT, payload: {},
+  }, { rng, now: 11 });
+  assert.equal(game.currentPlayerId, 'p2');
+});
+
+test('Conspiracy aplica todas las transferencias simultaneamente y recalcula Witch/Constable', () => {
+  let game = beginDay(started());
+  game.subPhase = SUB_PHASE.CONSPIRACY_RESOLUTION;
+  game.pendingActions = { conspiracySelections: {} };
+  const expected = Object.fromEntries(game.turnOrder.map((toId, index) => {
+    const fromId = game.turnOrder[(index - 1 + game.turnOrder.length) % game.turnOrder.length];
+    return [toId, { fromId, cardId: game.players[fromId].tryalCards.find((card) => !card.revealed).id }];
+  }));
+  const firstView = GameEngine.buildPlayerView(game, game.turnOrder[0]);
+  const firstChoice = firstView.privateState.legalActions.find((item) => item.type === ACTION.SELECT_CONSPIRACY_CARD);
+  assert.equal(firstChoice.sourceId, expected[game.turnOrder[0]].fromId);
+  assert.ok(firstChoice.tryalOptions.every((choice) => Number.isInteger(choice)));
+  for (const id of game.turnOrder) game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
+  game.turnOrder.forEach((toId) => {
+    assert.ok(game.players[toId].tryalCards.some((card) => card.id === expected[toId].cardId));
+    assert.equal(game.players[toId].lastConspiracyCard.fromId, expected[toId].fromId);
+  });
+  const witchOwner = game.turnOrder.find((id) => game.players[id].tryalCards.some((card) => card.type === TRYAL.WITCH && !card.revealed));
+  const constableOwner = game.turnOrder.find((id) => game.players[id].tryalCards.some((card) => card.type === TRYAL.CONSTABLE && !card.revealed));
+  assert.equal(game.players[witchOwner].isCurrentWitch, true);
+  assert.equal(game.players[witchOwner].hasEverBeenWitch, true);
+  assert.equal(game.players[constableOwner].isCurrentConstable, true);
+});
+
+test('7 puntos inician juicio; revelar WITCH mata y da victoria al Pueblo', () => {
+  let game = beginDay(started());
+  const accused = game.turnOrder.find((id) => game.players[id].tryalCards.some((card) => card.type === TRYAL.WITCH));
+  const actor = game.turnOrder.find((id) => id !== accused);
+  game.currentPlayerId = actor;
+  game.turn.index = game.turnOrder.indexOf(actor);
+  game.players[actor].hand.unshift({ id: 'witness_test', key: 'WITNESS', name: 'Testigo', color: 'RED', points: 7, trigger: 'ON_PLAY', targetRules: 'OTHER_PLAYER' });
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'witness_test', targetId: accused });
+  assert.equal(game.subPhase, SUB_PHASE.TRYAL_SELECTION);
+  const witchCard = game.players[accused].tryalCards.find((card) => card.type === TRYAL.WITCH);
+  game = act(game, actor, ACTION.SELECT_TRYAL, { targetId: accused, tryalCardId: witchCard.id });
+  assert.equal(game.players[accused].accusationTotal, 0);
+  assert.deepEqual(game.players[accused].accusations, []);
+  assert.equal(game.players[accused].alive, false);
+  assert.equal(game.status, GAME_STATUS.FINISHED);
+  assert.equal(game.winner, 'TOWN');
+  assert.equal(game.subPhase, SUB_PHASE.LAST_WORDS);
+  assert.ok(GameEngine.buildPlayerView(game, accused).privateState.legalActions.some((item) => item.type === ACTION.END_LAST_WORDS));
+  game = act(game, accused, ACTION.END_LAST_WORDS);
+  assert.equal(game.players[accused].canCommunicate, false);
+  const publicAccused = GameEngine.buildPlayerView(game, actor).publicState.players[accused];
+  assert.equal(publicAccused.wasEverWitch, true);
+});
+
+test('revelar las cinco cartas de Juicio mata aunque ninguna sea Bruja', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor && !game.players[id].tryalCards.some((card) => card.type === TRYAL.WITCH));
+  const cards = game.players[target].tryalCards;
+  cards.slice(0, -1).forEach((card) => { card.revealed = true; });
+  game.players[target].accusations = [{ points: 7 }];
+  game.players[target].accusationTotal = 7;
+  game.subPhase = SUB_PHASE.TRYAL_SELECTION;
+  game.pendingActions = { accusedId: target, accuserId: actor };
+  game = act(game, actor, ACTION.SELECT_TRYAL, { targetId: target, tryalCardId: cards.at(-1).id });
+  assert.equal(game.players[target].alive, false);
+  assert.equal(game.players[target].deathReason, 'ALL_TRYALS_REVEALED');
+  assert.equal(game.players[target].accusationTotal, 0);
+  assert.equal(GameEngine.buildPlayerView(game, actor).publicState.players[target].wasEverWitch, false);
+});
+
+test('si todos los vivos han sido bruja, ganan WITCHES', () => {
+  let game = beginDay(started());
+  game.turnOrder.forEach((id) => { game.players[id].hasEverBeenWitch = true; });
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  const card = game.players[target].tryalCards.find((item) => item.type === TRYAL.NOT_WITCH && !item.revealed);
+  game.subPhase = SUB_PHASE.TRYAL_SELECTION;
+  game.pendingActions = { accusedId: target, accuserId: actor };
+  game = act(game, actor, ACTION.SELECT_TRYAL, { targetId: target, tryalCardId: card.id });
+  assert.equal(game.winner, 'WITCHES');
+});
+
+test('proteccion del Alguacil evita la muerte nocturna y se limpia al amanecer', () => {
+  let game = beginDay(started());
+  const witch = game.turnOrder.find((id) => game.players[id].hasEverBeenWitch);
+  const victim = game.turnOrder.find((id) => id !== witch);
+  const constable = game.turnOrder.find((id) => game.players[id].isCurrentConstable);
+  game.status = GAME_STATUS.NIGHT; game.phase = GAME_STATUS.NIGHT; game.subPhase = SUB_PHASE.WITCH_SELECTION;
+  game.pendingActions = { witchVotes: {}, protection: null, confessions: {} };
+  game = act(game, witch, ACTION.SELECT_WITCH_VICTIM, { targetId: victim });
+  if (constable === victim) {
+    game.players[constable].isCurrentConstable = false;
+    const replacement = game.turnOrder.find((id) => id !== victim);
+    game.players[replacement].isCurrentConstable = true;
+    game = act(game, replacement, ACTION.SELECT_CONSTABLE_PROTECTION, { targetId: victim });
+  } else game = act(game, constable, ACTION.SELECT_CONSTABLE_PROTECTION, { targetId: victim });
+  for (const id of game.turnOrder.filter((id) => game.players[id].alive)) game = act(game, id, ACTION.PASS_CONFESSION, {}, id);
+  assert.equal(game.players[victim].alive, true);
+  assert.equal(game.players[victim].protectedTonight, false);
+  assert.equal(game.phase, GAME_STATUS.DAY);
+});
+
+test('Asilo impide el ataque de la Noche y permanece despues del amanecer', () => {
+  let game = beginDay(started());
+  const witch = game.turnOrder.find((id) => game.players[id].hasEverBeenWitch);
+  const victim = game.turnOrder.find((id) => id !== witch && !game.players[id].hasEverBeenWitch);
+  const constable = game.turnOrder.find((id) => game.players[id].isCurrentConstable);
+  game.players[victim].blueCards.push({ id: 'asylum_night', key: 'ASYLUM', name: 'Asilo / Proteccion', color: 'BLUE', duration: 'PERMANENT' });
+  game.status = GAME_STATUS.NIGHT; game.phase = GAME_STATUS.NIGHT; game.subPhase = SUB_PHASE.WITCH_SELECTION;
+  game.pendingActions = { witchVotes: {}, protection: null, confessions: {} };
+  game = act(game, witch, ACTION.SELECT_WITCH_VICTIM, { targetId: victim });
+  if (constable) {
+    const otherTarget = game.turnOrder.find((id) => game.players[id].alive && id !== constable && id !== victim);
+    game = act(game, constable, ACTION.SELECT_CONSTABLE_PROTECTION, { targetId: otherTarget });
+  }
+  for (const id of game.turnOrder.filter((id) => game.players[id].alive)) game = act(game, id, ACTION.PASS_CONFESSION, {}, id);
+  assert.equal(game.players[victim].alive, true);
+  assert.ok(game.players[victim].blueCards.some((card) => card.id === 'asylum_night'));
+  assert.equal(game.phase, GAME_STATUS.DAY);
+});
+
+test('confesion valida protege durante esa noche y revela publicamente la carta', () => {
+  let game = beginDay(started());
+  const witch = game.turnOrder.find((id) => game.players[id].hasEverBeenWitch);
+  const victim = game.turnOrder.find((id) => id !== witch);
+  const confession = game.players[victim].tryalCards.find((card) => card.type === TRYAL.NOT_WITCH && !card.revealed);
+  game.status = GAME_STATUS.NIGHT; game.phase = GAME_STATUS.NIGHT; game.subPhase = SUB_PHASE.CONFESSION;
+  game.pendingActions = { witchVotes: { [witch]: victim }, protection: null, confessions: {} };
+  game = act(game, victim, ACTION.CONFESS, { tryalCardId: confession.id });
+  assert.equal(game.players[victim].confessedTonight, true);
+  for (const id of game.turnOrder.filter((id) => id !== victim && game.players[id].alive)) game = act(game, id, ACTION.PASS_CONFESSION, {}, id);
+  assert.equal(game.players[victim].alive, true);
+  assert.equal(game.players[victim].confessedTonight, false);
+});
