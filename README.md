@@ -2,6 +2,11 @@
 
 Aplicacion multijugador con React, Vite, Tailwind CSS, Vercel Functions y Firebase. El cliente solo representa las decisiones que permite el motor; las reglas y el estado oficial se ejecutan en el backend dentro de una transaccion de Realtime Database.
 
+## Jugar
+
+- Aplicacion publica: [salem-1692-app.vercel.app](https://salem-1692-app.vercel.app)
+- Instructivo completo: [Como jugar Salem 1692](docs/COMO_JUGAR.md)
+
 ## Arquitectura
 
 ```text
