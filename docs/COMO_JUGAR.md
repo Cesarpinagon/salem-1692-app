@@ -2,7 +2,7 @@
 
 Salem 1692 es un juego de identidades ocultas, acusaciones y deducción social para **4 a 12 jugadores**. Cada persona juega desde su propio teléfono y debe mantener en secreto la información privada que aparece en su pantalla.
 
-Puedes jugar en [salem-1692-app.vercel.app](https://salem-1692-app.vercel.app).
+Esta versión está pensada para partidas privadas con familiares y amigos. El anfitrión comparte directamente con los invitados el enlace de la instalación; no es necesario publicarlo en el repositorio ni en redes sociales.
 
 ## 1. Preparar una partida
 
@@ -156,7 +156,7 @@ Recarga la página. La aplicación descartará la sesión anterior y permitirá 
 Haz una recarga forzada:
 
 - Windows o Android con teclado: `Ctrl + Shift + R`.
-- iPhone o Android: cierra la pestaña y abre nuevamente el enlace público.
+- iPhone o Android: cierra la pestaña y abre nuevamente el enlace que compartió el anfitrión.
 
 ### El código no funciona
 
