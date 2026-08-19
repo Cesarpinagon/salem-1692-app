@@ -22,6 +22,7 @@ export function hydrateGameState(gameInput) {
   game.turn ||= { number: 0, index: 0, mode: null };
   game.nextEventId ??= 1;
   game.interruptedTurn ||= null;
+  game.pendingNightAfterDraw ??= false;
   Object.values(game.players).forEach((player) => {
     ['hand', 'tryalCards', 'blueCards', 'accusations', 'secretInformation'].forEach((field) => {
       player[field] = Array.isArray(player[field]) ? player[field] : [];
@@ -111,6 +112,7 @@ export function createGame({ id, inviteCode, host, now = Date.now() }) {
       [host.id]: playerTemplate({ ...host, isHost: true }),
     }, turnOrder: [host.id], effects: [], pendingActions: {}, timers: { phaseEndsAt: null }, history: [],
     events: [], internalLog: [], processedActionIds: {}, winner: null, nextEventId: 1, randomAudit: [],
+    pendingNightAfterDraw: false,
   };
 }
 
@@ -216,6 +218,7 @@ function resetGame(game, playerId, at) {
     nextEventId: 1,
     randomAudit: [],
     interruptedTurn: null,
+    pendingNightAfterDraw: false,
     updatedAt: nowIso(at),
   });
 }
@@ -259,24 +262,35 @@ function startNight(game, at, drawResume = null) {
   game.subPhase = SUB_PHASE.WITCH_SELECTION;
   game.pendingActions = { witchVotes: {}, protection: null, confessions: {} };
   game.interruptedTurn = drawResume;
+  game.pendingNightAfterDraw = false;
   setDecisionTimer(game, at);
   publicEvent(game, EVENT.NIGHT_STARTED, 'Comenzo la noche.', {}, at);
 }
 
 function resolveDrawnCard(game, playerId, card, remainingDraws, at) {
   publicEvent(game, EVENT.CARD_DRAWN, `${game.players[playerId].name} robo una carta.`, { color: card.color }, at);
-  if (card.color !== CARD_COLOR.BLACK) { game.players[playerId].hand.push(card); return false; }
+  const exhaustedMainDeck = game.deck.length === 0;
+  const drawResume = remainingDraws > 0 ? { playerId, remainingDraws } : null;
+  if (card.color !== CARD_COLOR.BLACK) {
+    game.players[playerId].hand.push(card);
+    if (exhaustedMainDeck) {
+      startNight(game, at, drawResume);
+      return true;
+    }
+    return false;
+  }
   game.discard.push(card);
   if (card.key === 'CONSPIRACY') {
     game.subPhase = SUB_PHASE.CONSPIRACY_RESOLUTION;
     game.pendingActions = { conspiracySelections: {} };
-    game.interruptedTurn = remainingDraws > 0 ? { playerId, remainingDraws } : null;
+    game.interruptedTurn = drawResume;
+    game.pendingNightAfterDraw = exhaustedMainDeck;
     setDecisionTimer(game, at);
     publicEvent(game, 'CONSPIRACY_STARTED', 'Comenzo una conspiracion.', {}, at);
     return true;
   }
-  if (card.key === 'NIGHT') {
-    startNight(game, at, remainingDraws > 0 ? { playerId, remainingDraws } : null);
+  if (exhaustedMainDeck) {
+    startNight(game, at, drawResume);
     return true;
   }
   return false;
@@ -504,9 +518,12 @@ function chooseConspiracyCard(game, playerId, payload, rng, at) {
   checkVictory(game, at);
   if (game.status !== GAME_STATUS.FINISHED) {
     game.pendingActions = {};
-    game.subPhase = SUB_PHASE.WAITING_ACTION;
-    if (game.interruptedTurn) resumeInterruptedDraw(game, rng, at);
-    else endTurn(game, at);
+    if (game.pendingNightAfterDraw) startNight(game, at, game.interruptedTurn);
+    else if (game.interruptedTurn) resumeInterruptedDraw(game, rng, at);
+    else {
+      game.subPhase = SUB_PHASE.WAITING_ACTION;
+      endTurn(game, at);
+    }
   }
 }
 
