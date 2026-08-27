@@ -38,6 +38,8 @@ Las cartas de Juicio son independientes de la mano de juego. Cada jugador recibe
 
 Las cartas pueden cambiar de propietario debido a Conspiración, por lo que las identidades pueden cambiar durante la partida.
 
+Cada jugador puede consultar en todo momento sus propias cartas de Juicio dentro del panel de información privada. Allí también se recuerda si pertenece al equipo de las Brujas y si actualmente posee la carta de Alguacil. Esta información nunca se muestra en los tableros de los demás jugadores.
+
 ## 4. Amanecer inicial y Gato Negro
 
 Al comenzar la partida se muestra una fase privada de Amanecer:

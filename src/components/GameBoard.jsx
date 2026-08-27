@@ -87,6 +87,16 @@ export function GameBoard({ game, privateState, onAction, busy }) {
             })}
           </div>
 
+          <section className="mb-3 border-t border-stone-800 pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-stone-500">Sólo tú puedes verlas</p><h3 className="text-sm font-bold text-stone-200">Mis cartas de Juicio</h3></div>
+              <div className="flex flex-wrap gap-1 text-[10px]"><span className={`rounded-full px-2 py-1 font-bold ${privateState.hasEverBeenWitch ? 'bg-red-950 text-red-300' : 'bg-emerald-950 text-emerald-300'}`}>{privateState.hasEverBeenWitch ? 'Equipo Brujas' : 'Equipo Pueblo'}</span>{privateState.isCurrentConstable && <span className="rounded-full bg-amber-950 px-2 py-1 font-bold text-amber-300">Alguacil actual</span>}</div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
+              {privateState.tryalCards?.map((card, index) => <div key={card.id} className={`rounded-lg border p-2 ${card.type === 'WITCH' ? 'border-red-900 bg-red-950/30 text-red-200' : card.type === 'CONSTABLE' ? 'border-amber-900 bg-amber-950/30 text-amber-200' : 'border-emerald-900 bg-emerald-950/20 text-emerald-200'} ${card.revealed ? 'opacity-55' : ''}`}><span className="block text-[9px] uppercase text-stone-500">Juicio {index + 1}</span><strong className="text-xs">{tryalLabel(card.type)}</strong>{card.revealed && <span className="ml-1 text-[9px] text-stone-400">· revelada</span>}</div>)}
+            </div>
+          </section>
+
           <div className="grid grid-cols-2 gap-2 border-t border-stone-800 pt-3">
             <button disabled={!actionOf(privateState, 'DRAW_CARDS') || busy} onClick={() => onAction('DRAW_CARDS')} className="rounded-lg bg-amber-700 px-3 py-2.5 text-xs font-bold disabled:opacity-35"><Layers className="mr-1 inline h-4 w-4" />Robar 2</button>
             <button disabled={!actionOf(privateState, 'END_TURN') || busy} onClick={() => onAction('END_TURN')} className="rounded-lg bg-stone-700 px-3 py-2.5 text-xs font-bold disabled:opacity-35"><CheckCircle2 className="mr-1 inline h-4 w-4" />Terminar</button>

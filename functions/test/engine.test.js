@@ -109,6 +109,8 @@ test('PlayerView nunca filtra manos ni Tryal ocultas ajenas', () => {
   const view = GameEngine.buildPlayerView(game, 'p1');
   assert.ok(view.privateState.hand.length);
   assert.ok(view.privateState.tryalCards.length);
+  assert.deepEqual(view.privateState.tryalCards, game.players.p1.tryalCards);
+  assert.ok(view.privateState.tryalCards.every((card) => [TRYAL.WITCH, TRYAL.NOT_WITCH, TRYAL.CONSTABLE].includes(card.type)));
   assert.equal('protectedTonight' in view.privateState, false);
   Object.entries(view.publicState.players).forEach(([id, player]) => {
     assert.equal('hand' in player, false);
