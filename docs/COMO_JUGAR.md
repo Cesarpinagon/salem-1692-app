@@ -66,12 +66,12 @@ Los puntos se colocan frente al jugador objetivo. Cuando llega a **7 o más punt
 
 ### Cartas verdes
 
-- **Coartada:** elimina todas las acusaciones acumuladas por quien la juega.
+- **Coartada:** se juega sobre otro jugador y retira hasta 3 cartas rojas acumuladas frente a él. Después va a la pila de descarte. Nunca puede jugarse sobre uno mismo.
 - **Casamiento:** existen exactamente dos cartas. Cada carta se asigna a un solo jugador vivo que todavía no tenga una carta de Casamiento. Después de aparecer una vez, no regresa al mazo al reciclar el descarte tras la Noche.
 
 ### Carta azul
 
-- **Asilo / Protección:** permanece frente al jugador y lo protege de nuevas acusaciones y de ataques de las Brujas durante la Noche.
+- **Asilo / Protección:** se juega boca arriba frente a otro jugador y permanece protegiéndolo de nuevas acusaciones y de ataques de las Brujas durante la Noche. Nunca puede jugarse sobre uno mismo.
 
 ### Carta negra
 

@@ -159,6 +159,44 @@ test('el mazo contiene exactamente una Conspiracion y dos cartas de Casamiento',
   }
 });
 
+test('Coartada solo se juega sobre otro jugador y retira como maximo tres acusaciones', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  game.players[actor].hand.unshift({ id: 'alibi_test', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' });
+  game.players[target].accusations = [
+    { cardId: 'red_1', points: 1 }, { cardId: 'red_2', points: 1 },
+    { cardId: 'red_3', points: 1 }, { cardId: 'red_4', points: 1 },
+  ];
+  game.players[target].accusationTotal = 4;
+
+  const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'alibi_test');
+  assert.ok(action.targets.includes(target));
+  assert.ok(!action.targets.includes(actor));
+  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'alibi_test', targetId: actor }), (error) => error.code === 'INVALID_TARGET');
+
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'alibi_test', targetId: target });
+  assert.equal(game.players[target].accusations.length, 1);
+  assert.equal(game.players[target].accusationTotal, 1);
+  assert.ok(game.discard.some((card) => card.id === 'alibi_test'));
+});
+
+test('Asilo solo se coloca frente a otro jugador y permanece protegiendolo', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  game.players[actor].hand.unshift({ id: 'asylum_play', key: 'ASYLUM', name: 'Asilo / Proteccion', color: 'BLUE', trigger: 'ON_PLAY', targetRules: 'ANY_ALIVE_PLAYER', duration: 'PERMANENT' });
+
+  const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'asylum_play');
+  assert.ok(action.targets.includes(target));
+  assert.ok(!action.targets.includes(actor));
+  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'asylum_play', targetId: actor }), (error) => error.code === 'INVALID_TARGET');
+
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'asylum_play', targetId: target });
+  assert.equal(game.players[target].blueCards.some((card) => card.id === 'asylum_play'), true);
+  assert.equal(game.players[actor].blueCards.some((card) => card.id === 'asylum_play'), false);
+});
+
 test('Conspiracion nunca se reparte y permanece como carta unica del mazo', () => {
   for (const playerCount of [4, 8, 12]) {
     let game = GameEngine.createGame({ id: `DECK_${playerCount}`, inviteCode: `D${playerCount}TEST`, host: { id: 'p1', firebaseUid: 'u1', name: 'Host' }, now: 1 });

@@ -9,8 +9,16 @@ const nowIso = (now) => new Date(now).toISOString();
 
 export function hydrateGameState(gameInput) {
   const game = clone(gameInput);
+  const normalizeCard = (card) => {
+    if (!card || !['ALIBI', 'ASYLUM'].includes(card.key)) return card;
+    card.targetRules = 'OTHER_PLAYER';
+    if (card.key === 'ALIBI') card.description = 'Retira hasta 3 cartas de acusacion de otro jugador.';
+    if (card.key === 'ASYLUM') card.description = 'Protege permanentemente a otro jugador contra acusaciones y ataques de la Noche.';
+    return card;
+  };
   const arrayFields = ['deck', 'discard', 'retiredCards', 'effects', 'history', 'events', 'internalLog', 'randomAudit', 'turnOrder'];
   arrayFields.forEach((field) => { game[field] = Array.isArray(game[field]) ? game[field] : []; });
+  ['deck', 'discard', 'retiredCards'].forEach((field) => game[field].forEach(normalizeCard));
   game.players ||= {};
   game.pendingActions ||= {};
   game.pendingActions.conspiracySelections ||= {};
@@ -43,6 +51,7 @@ export function hydrateGameState(gameInput) {
     player.wasWitchAnnounced ??= false;
     conspiracyInLegacyHands.push(...player.hand.filter((card) => card.key === 'CONSPIRACY'));
     player.hand = player.hand.filter((card) => card.key !== 'CONSPIRACY');
+    [...player.hand, ...player.blueCards].forEach(normalizeCard);
   });
   const conspiracyAlreadyInCycle = [...game.deck, ...game.discard].some((card) => card.key === 'CONSPIRACY');
   if (!conspiracyAlreadyInCycle && conspiracyInLegacyHands.length) game.deck.push(conspiracyInLegacyHands[0]);
@@ -383,9 +392,11 @@ function playCard(game, playerId, payload, at) {
       setDecisionTimer(game, at);
     }
   } else if (card.key === 'ALIBI') {
-    game.players[targetId].accusations = [];
-    game.players[targetId].accusationTotal = 0;
+    const target = game.players[targetId];
+    const removed = target.accusations.splice(0, 3);
+    target.accusationTotal = target.accusations.reduce((total, accusation) => total + (accusation.points || 0), 0);
     game.discard.push(card);
+    publicEvent(game, 'ALIBI_APPLIED', `${game.players[playerId].name} retiro ${removed.length} carta${removed.length === 1 ? '' : 's'} de acusacion de ${target.name}.`, { playerId, targetId, removedCount: removed.length }, at);
   } else if (card.key === 'MATCHMAKER') {
     game.players[targetId].matchmakerCards.push(card);
     publicEvent(game, EVENT.MARRIAGE_CARD_ASSIGNED, `${game.players[playerId].name} asigno una carta de Casamiento a ${game.players[targetId].name}.`, { playerId, targetId, cardId: card.id }, at);
