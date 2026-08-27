@@ -67,7 +67,7 @@ Los puntos se colocan frente al jugador objetivo. Cuando llega a **7 o más punt
 ### Cartas verdes
 
 - **Coartada:** elimina todas las acusaciones acumuladas por quien la juega.
-- **Casamiento:** existen exactamente dos cartas. Cada carta se asigna a un solo jugador vivo que todavía no tenga una carta de Casamiento.
+- **Casamiento:** existen exactamente dos cartas. Cada carta se asigna a un solo jugador vivo que todavía no tenga una carta de Casamiento. Después de aparecer una vez, no regresa al mazo al reciclar el descarte tras la Noche.
 
 ### Carta azul
 

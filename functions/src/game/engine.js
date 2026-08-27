@@ -9,7 +9,7 @@ const nowIso = (now) => new Date(now).toISOString();
 
 export function hydrateGameState(gameInput) {
   const game = clone(gameInput);
-  const arrayFields = ['deck', 'discard', 'effects', 'history', 'events', 'internalLog', 'randomAudit', 'turnOrder'];
+  const arrayFields = ['deck', 'discard', 'retiredCards', 'effects', 'history', 'events', 'internalLog', 'randomAudit', 'turnOrder'];
   arrayFields.forEach((field) => { game[field] = Array.isArray(game[field]) ? game[field] : []; });
   game.players ||= {};
   game.pendingActions ||= {};
@@ -108,7 +108,7 @@ export function createGame({ id, inviteCode, host, now = Date.now() }) {
   return {
     id, inviteCode, status: GAME_STATUS.LOBBY, phase: GAME_STATUS.LOBBY, subPhase: null, round: 0,
     turn: { number: 0, index: 0, mode: null }, currentPlayerId: null, version: 0,
-    createdAt: nowIso(now), updatedAt: nowIso(now), deck: [], discard: [], players: {
+    createdAt: nowIso(now), updatedAt: nowIso(now), deck: [], discard: [], retiredCards: [], players: {
       [host.id]: playerTemplate({ ...host, isHost: true }),
     }, turnOrder: [host.id], effects: [], pendingActions: {}, timers: { phaseEndsAt: null }, history: [],
     events: [], internalLog: [], processedActionIds: {}, winner: null, nextEventId: 1, randomAudit: [],
@@ -206,6 +206,7 @@ function resetGame(game, playerId, at) {
     currentPlayerId: null,
     deck: [],
     discard: [],
+    retiredCards: [],
     players,
     effects: [],
     pendingActions: {},
@@ -297,12 +298,17 @@ function resolveDrawnCard(game, playerId, card, remainingDraws, at) {
   return false;
 }
 
+function recycleDiscard(game, rng) {
+  const reusableCards = game.discard.filter((card) => card.key !== 'MATCHMAKER');
+  const spentMatchmakerCards = game.discard.filter((card) => card.key === 'MATCHMAKER');
+  game.retiredCards.push(...spentMatchmakerCards);
+  game.deck = shuffled(reusableCards, rng, game.randomAudit);
+  game.discard = [];
+}
+
 function drawSequence(game, playerId, drawCount, rng, at) {
   for (let draw = 0; draw < drawCount; draw += 1) {
-    if (!game.deck.length) {
-      game.deck = shuffled(game.discard, rng, game.randomAudit);
-      game.discard = [];
-    }
+    if (!game.deck.length) recycleDiscard(game, rng);
     assertRule(game.deck.length, 'EMPTY_DECK', 'No hay cartas disponibles.');
     const card = game.deck.shift();
     const remainingDraws = drawCount - draw - 1;
@@ -430,7 +436,9 @@ function eliminatePlayer(game, playerId, reason) {
   player.deathReason = reason;
   player.wasWitchAnnounced = player.hasEverBeenWitch || player.tryalCards.some((card) => card.type === TRYAL.WITCH);
   player.tryalCards.forEach((card) => { card.revealed = true; });
-  game.discard.push(...player.hand, ...player.blueCards, ...player.matchmakerCards);
+  const releasedCards = [...player.hand, ...player.blueCards, ...player.matchmakerCards];
+  game.retiredCards.push(...releasedCards.filter((card) => card.key === 'MATCHMAKER'));
+  game.discard.push(...releasedCards.filter((card) => card.key !== 'MATCHMAKER'));
   player.hand = [];
   player.blueCards = [];
   player.matchmakerCards = [];

@@ -194,6 +194,28 @@ test('si la ultima carta es Conspiracion, se resuelve antes de comenzar la Noche
   assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 1);
 });
 
+test('las cartas de Casamiento no vuelven al mazo cuando se recicla el descarte', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const definition = buildTownDeck(4).find((card) => card.key === 'MATCHMAKER');
+  const spentIds = ['spent_matchmaker_1', 'spent_matchmaker_2'];
+  game.deck = [];
+  game.discard = [
+    { ...definition, id: spentIds[0] },
+    { id: 'reusable_1', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+    { ...definition, id: spentIds[1] },
+    { id: 'reusable_2', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+    { id: 'reusable_3', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+  ];
+
+  game = act(game, actor, ACTION.DRAW_CARDS);
+
+  assert.ok(spentIds.every((id) => game.retiredCards.some((card) => card.id === id)));
+  assert.ok(!game.deck.some((card) => card.key === 'MATCHMAKER'));
+  assert.ok(!game.players[actor].hand.some((card) => spentIds.includes(card.id)));
+  assert.equal(game.deck.length, 1);
+});
+
 test('Casamiento requiere asignar sus dos cartas a personas distintas antes de activar el vinculo mortal', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
@@ -229,6 +251,8 @@ test('Casamiento requiere asignar sus dos cartas a personas distintas antes de a
   const deathBeforeMarriage = act(beforeMarriage, actor, ACTION.SELECT_TRYAL, { targetId: witch, tryalCardId: pendingWitchCard.id }, 'before_marriage');
   assert.equal(deathBeforeMarriage.players[witch].alive, false);
   assert.equal(deathBeforeMarriage.players[partner].alive, true);
+  assert.ok(deathBeforeMarriage.retiredCards.some((card) => card.id === firstCard.id));
+  assert.ok(!deathBeforeMarriage.discard.some((card) => card.id === firstCard.id));
 
   game = act(game, actor, ACTION.PLAY_CARD, { cardId: secondCard.id, targetId: partner });
   assert.equal(game.players[witch].marriedTo, partner);
