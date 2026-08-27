@@ -1,1 +1,100 @@
 @import "tailwindcss";
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f3ead9;
+  background: #100d0b;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --ink: #100d0b;
+  --coal: #191411;
+  --paper: #d8c29a;
+  --parchment: #bca171;
+  --brass: #b68a3a;
+  --blood: #7f1d1d;
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; background: var(--ink); }
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: radial-gradient(circle at 15% 10%, rgba(127, 29, 29, 0.14), transparent 30rem), radial-gradient(circle at 85% 70%, rgba(182, 138, 58, 0.08), transparent 34rem), #100d0b;
+}
+button, input, textarea { font: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid #d2a955; outline-offset: 3px; }
+::selection { color: #fff8e8; background: #7f1d1d; }
+
+.salem-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: linear-gradient(rgba(16, 13, 11, 0.96), rgba(16, 13, 11, 0.98)), repeating-linear-gradient(0deg, transparent 0 3px, rgba(216, 194, 154, 0.018) 3px 4px);
+}
+.salem-shell::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  opacity: 0.55;
+  background: radial-gradient(circle at center, transparent 45%, rgba(0, 0, 0, 0.65) 100%), repeating-radial-gradient(circle at 20% 30%, transparent 0 2px, rgba(255, 244, 220, 0.018) 2px 3px);
+}
+.display-type { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.04em; }
+.eyebrow { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.24em; text-transform: uppercase; color: #cfaa60; }
+.ornament { display: flex; align-items: center; gap: 0.75rem; width: min(100%, 18rem); color: #a47c38; }
+.ornament::before, .ornament::after { flex: 1; height: 1px; content: ""; background: linear-gradient(90deg, transparent, currentColor); }
+.ornament::after { background: linear-gradient(90deg, currentColor, transparent); }
+
+.period-panel {
+  position: relative;
+  border: 1px solid rgba(190, 157, 91, 0.3);
+  background: linear-gradient(145deg, rgba(42, 34, 28, 0.96), rgba(22, 18, 15, 0.98)), repeating-linear-gradient(90deg, transparent 0 12px, rgba(255, 255, 255, 0.02) 12px 13px);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48), inset 0 1px rgba(255, 244, 214, 0.05);
+}
+.period-panel::after { position: absolute; inset: 5px; border: 1px solid rgba(216, 194, 154, 0.08); content: ""; pointer-events: none; }
+.period-field {
+  width: 100%;
+  border: 1px solid rgba(190, 157, 91, 0.28);
+  border-radius: 0.5rem;
+  color: #f5ead4;
+  background: rgba(8, 7, 6, 0.72);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.period-field::placeholder { color: #7f7468; }
+.period-field:focus { border-color: #c69b4b; background: rgba(18, 14, 11, 0.9); box-shadow: 0 0 0 3px rgba(182, 138, 58, 0.12); outline: none; }
+.wax-button {
+  position: relative;
+  border: 1px solid #9b3434;
+  color: #fff3dc;
+  background: linear-gradient(180deg, #9a2d2d, #6f1717);
+  box-shadow: 0 8px 22px rgba(70, 10, 10, 0.3), inset 0 1px rgba(255, 231, 199, 0.15);
+  transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+}
+.wax-button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); box-shadow: 0 12px 28px rgba(70, 10, 10, 0.42), inset 0 1px rgba(255, 231, 199, 0.15); }
+.wax-button:active:not(:disabled) { transform: translateY(1px); }
+.wax-button:disabled { cursor: not-allowed; filter: grayscale(0.35); opacity: 0.45; }
+.brass-button { border: 1px solid rgba(214, 177, 101, 0.48); color: #23190c; background: linear-gradient(180deg, #d8b36a, #a9782c); box-shadow: inset 0 1px rgba(255, 248, 216, 0.4), 0 8px 20px rgba(0, 0, 0, 0.24); }
+.glass-card { border: 1px solid rgba(190, 157, 91, 0.2); background: rgba(28, 23, 19, 0.88); box-shadow: inset 0 1px rgba(255, 255, 255, 0.035), 0 18px 42px rgba(0, 0, 0, 0.22); backdrop-filter: blur(14px); }
+
+.lobby-scene { position: relative; min-height: 100vh; overflow: hidden; background-image: url("./assets/salem-village-hero.png"); background-position: center; background-size: cover; }
+.lobby-scene::before { position: absolute; inset: 0; content: ""; background: linear-gradient(90deg, rgba(7, 6, 5, 0.9) 0%, rgba(7, 6, 5, 0.5) 52%, rgba(7, 6, 5, 0.72) 100%), linear-gradient(0deg, rgba(7, 6, 5, 0.98) 0%, transparent 45%, rgba(7, 6, 5, 0.15) 100%); }
+.lobby-scene::after { position: absolute; inset: 0; content: ""; pointer-events: none; box-shadow: inset 0 0 160px 30px rgba(0, 0, 0, 0.78); }
+.lobby-content { position: relative; z-index: 1; }
+.status-dot { box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.09), 0 0 14px currentColor; }
+.game-header { border-color: rgba(182, 138, 58, 0.28); background: linear-gradient(115deg, rgba(67, 45, 22, 0.25), transparent 45%), rgba(25, 20, 17, 0.94); }
+.player-card { box-shadow: inset 0 1px rgba(255, 255, 255, 0.025), 0 12px 28px rgba(0, 0, 0, 0.15); }
+.player-card:hover:not(:disabled) { transform: translateY(-1px); }
+.private-panel { background: linear-gradient(155deg, rgba(67, 45, 22, 0.25), transparent 45%), #191411; }
+.night-scene { background: radial-gradient(circle at 50% 22%, rgba(78, 53, 121, 0.22), transparent 24rem), linear-gradient(rgba(8, 7, 12, 0.68), rgba(8, 7, 12, 0.96)), url("./assets/salem-village-hero.png") center / cover fixed; }
+.event-backdrop { background: radial-gradient(circle at center, rgba(91, 53, 27, 0.2), transparent 26rem), rgba(4, 3, 3, 0.94); backdrop-filter: blur(9px); }
+
+@media (max-width: 640px) {
+  .lobby-scene { background-position: 58% center; }
+  .lobby-scene::before { background: linear-gradient(0deg, rgba(7, 6, 5, 0.98) 0%, rgba(7, 6, 5, 0.55) 62%, rgba(7, 6, 5, 0.28) 100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

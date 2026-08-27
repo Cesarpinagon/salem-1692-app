@@ -23,9 +23,16 @@ function started() {
 function beginDay(game) {
   const selector = game.turnOrder.find((id) => game.players[id].isCurrentWitch) || 'p1';
   const target = game.turnOrder.find((id) => id !== selector && game.players[id].tryalCards.some((card) => card.type === TRYAL.NOT_WITCH && !card.revealed));
-  game = act(game, selector, ACTION.SELECT_BLACK_CAT, { targetId: target });
-  const card = game.players[target].tryalCards.find((item) => item.type === TRYAL.NOT_WITCH && !item.revealed);
-  return act(game, target, ACTION.SELECT_TRYAL, { targetId: target, tryalCardId: card.id });
+  return act(game, selector, ACTION.SELECT_BLACK_CAT, { targetId: target });
+}
+
+function revealBlackCatAfterConspiracy(game, suffix = '') {
+  assert.equal(game.subPhase, SUB_PHASE.TRYAL_SELECTION);
+  assert.equal(game.pendingActions.resumeAfter, 'CONSPIRACY');
+  const target = game.pendingActions.accusedId;
+  const card = game.players[target].tryalCards.find((item) => item.type === TRYAL.NOT_WITCH && !item.revealed)
+    || game.players[target].tryalCards.find((item) => !item.revealed);
+  return act(game, target, ACTION.SELECT_TRYAL, { targetId: target, tryalCardId: card.id }, suffix);
 }
 
 test('solo el host puede iniciar y se exige una cantidad valida', () => {
@@ -188,6 +195,7 @@ test('si la ultima carta es Conspiracion, se resuelve antes de comenzar la Noche
   for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) {
     game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
   }
+  game = revealBlackCatAfterConspiracy(game, 'before_night');
   assert.equal(game.phase, GAME_STATUS.NIGHT);
   assert.equal(game.subPhase, SUB_PHASE.WITCH_SELECTION);
   assert.equal(game.pendingNightAfterDraw, false);
@@ -283,15 +291,30 @@ test('Asilo es permanente y bloquea acusaciones contra quien lo posee', () => {
   assert.equal(game.players[target].blueCards[0].duration, 'PERMANENT');
 });
 
-test('el Gato Negro obliga al objetivo a revelar inmediatamente una carta de Juicio', () => {
+test('asignar el Gato Negro al inicio no revela una carta de Juicio', () => {
   let game = started();
   const witch = game.turnOrder.find((id) => game.players[id].isCurrentWitch);
   const target = game.turnOrder.find((id) => id !== witch);
+  const revealedBefore = game.players[target].tryalCards.filter((card) => card.revealed).length;
   game = act(game, witch, ACTION.SELECT_BLACK_CAT, { targetId: target });
+  assert.equal(game.phase, GAME_STATUS.DAY);
+  assert.equal(game.subPhase, SUB_PHASE.WAITING_ACTION);
+  assert.equal(game.players[target].hasBlackCat, true);
+  assert.equal(game.players[target].tryalCards.filter((card) => card.revealed).length, revealedBefore);
+  assert.equal(GameEngine.buildPlayerView(game, target).privateState.legalActions.some((item) => item.type === ACTION.SELECT_TRYAL), false);
+});
+
+test('el Gato Negro obliga a revelar una carta despues de Conspiracion', () => {
+  let game = beginDay(started());
+  const holder = game.turnOrder.find((id) => game.players[id].hasBlackCat);
+  game.subPhase = SUB_PHASE.CONSPIRACY_RESOLUTION;
+  game.pendingActions = { conspiracySelections: {} };
+  for (const id of game.turnOrder) game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
   assert.equal(game.subPhase, SUB_PHASE.TRYAL_SELECTION);
-  assert.equal(game.pendingActions.accusedId, target);
-  assert.equal(GameEngine.buildPlayerView(game, witch).privateState.legalActions.some((item) => item.type === ACTION.SELECT_TRYAL), false);
-  assert.equal(GameEngine.buildPlayerView(game, target).privateState.legalActions.some((item) => item.type === ACTION.SELECT_TRYAL), true);
+  assert.equal(game.pendingActions.accusedId, holder);
+  assert.equal(game.pendingActions.resumeAfter, 'CONSPIRACY');
+  assert.equal(GameEngine.buildPlayerView(game, holder).publicState.pendingAction.reason, 'BLACK_CAT');
+  assert.equal(GameEngine.buildPlayerView(game, holder).privateState.legalActions.some((item) => item.type === ACTION.SELECT_TRYAL), true);
 });
 
 test('el segundo robo se reanuda despues de resolver Conspiracy', () => {
@@ -309,6 +332,7 @@ test('el segundo robo se reanuda despues de resolver Conspiracy', () => {
   for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) {
     game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
   }
+  game = revealBlackCatAfterConspiracy(game, 'resume_draw');
   assert.ok(game.players[actor].hand.some((card) => card.id === 'alibi_resume'));
   assert.equal(game.currentPlayerId, nextPlayer);
   assert.equal(game.interruptedTurn, null);

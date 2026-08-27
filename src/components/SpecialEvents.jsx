@@ -30,5 +30,5 @@ function LastWordsForm({ busy, onSubmit }) {
 }
 
 function Overlay({ children }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/90 p-4"><section className="w-full max-w-sm rounded-2xl border border-stone-700 bg-stone-900 p-6 text-center shadow-2xl">{children}</section></div>;
+  return <div className="event-backdrop fixed inset-0 z-50 grid place-items-center p-4"><section className="period-panel w-full max-w-sm rounded-2xl border-stone-700 p-6 text-center shadow-2xl"><div className="relative z-10">{children}</div></section></div>;
 }

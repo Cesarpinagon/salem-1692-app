@@ -44,7 +44,7 @@ Al comenzar la partida se muestra una fase privada de Amanecer:
 
 1. La Bruja inicial descubre su identidad.
 2. La Bruja elige a otro jugador para entregarle el **Gato Negro**.
-3. El jugador que recibe el Gato Negro debe revelar inmediatamente una de sus cartas de Juicio.
+3. La asignación no revela ninguna carta de Juicio en ese momento.
 4. Después comienza el primer turno del Día.
 
 ## 5. Turnos durante el Día
@@ -77,7 +77,7 @@ Los puntos se colocan frente al jugador objetivo. Cuando llega a **7 o más punt
 
 - **Conspiración:** existe una sola carta en el mazo. Al robarla, cada jugador vivo elige una carta de Juicio oculta del jugador que está a su izquierda. Todas las transferencias se aplican simultáneamente.
 
-La pantalla indica de quién se está tomando la carta y pide confirmar la selección. Después de la transferencia, cada jugador ve privadamente qué carta recibió.
+La pantalla indica de quién se está tomando la carta y pide confirmar la selección. Después de la transferencia, cada jugador ve privadamente qué carta recibió. Cuando termina la Conspiración, quien tenga el **Gato Negro** debe revelar una de sus cartas de Juicio; solo entonces se activa su efecto.
 
 ## 6. Acusaciones y Juicio
 

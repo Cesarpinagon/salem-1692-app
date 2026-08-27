@@ -58,8 +58,8 @@ export default function App() {
   const me = game.players?.[privateState.playerId];
 
   return (
-    <main className="min-h-screen bg-stone-950 text-stone-100">
-      {error && <div role="alert" className="fixed top-3 left-1/2 z-[70] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-lg border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-100 shadow-xl">{error}</div>}
+    <main className="salem-shell min-h-screen text-stone-100">
+      {error && <div role="alert" className="period-panel fixed top-3 left-1/2 z-[70] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-lg border-red-800 px-4 py-3 text-sm text-red-100">{error}</div>}
       {game.phase === 'LOBBY' && <WaitingRoom roomCode={game.inviteCode} players={game.players} isHost={me?.isHost} onStartGame={() => dispatch('START_GAME')} busy={busy} />}
       {game.phase === 'DAWN' && <NightFirst game={game} privateState={privateState} onAction={dispatch} busy={busy} />}
       {game.phase === 'DAY' && <GameBoard game={game} privateState={privateState} onAction={dispatch} busy={busy} />}
@@ -71,7 +71,7 @@ export default function App() {
 }
 
 function Loading({ error }) {
-  return <div className="grid min-h-screen place-items-center bg-stone-950 p-6 text-center text-stone-300"><div><div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" /><p>{error || 'Restaurando tu partida de Salem...'}</p></div></div>;
+  return <div className="salem-shell grid min-h-screen place-items-center p-6 text-center text-stone-300"><div className="period-panel rounded-2xl px-10 py-9"><div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" /><p className="display-type">{error || 'Restaurando tu partida de Salem...'}</p></div></div>;
 }
 
 function TimeoutControl({ action, onApply, busy }) {
