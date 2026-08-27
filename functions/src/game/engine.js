@@ -53,6 +53,17 @@ export function hydrateGameState(gameInput) {
     player.hand = player.hand.filter((card) => card.key !== 'CONSPIRACY');
     [...player.hand, ...player.blueCards].forEach(normalizeCard);
   });
+  let asylumKept = false;
+  const keepSingleAsylum = (cards) => cards.filter((card) => {
+    if (card.key !== 'ASYLUM') return true;
+    if (asylumKept) return false;
+    asylumKept = true;
+    return true;
+  });
+  Object.values(game.players).forEach((player) => { player.blueCards = keepSingleAsylum(player.blueCards); });
+  Object.values(game.players).forEach((player) => { player.hand = keepSingleAsylum(player.hand); });
+  game.deck = keepSingleAsylum(game.deck);
+  game.discard = keepSingleAsylum(game.discard);
   const conspiracyAlreadyInCycle = [...game.deck, ...game.discard].some((card) => card.key === 'CONSPIRACY');
   if (!conspiracyAlreadyInCycle && conspiracyInLegacyHands.length) game.deck.push(conspiracyInLegacyHands[0]);
   return game;

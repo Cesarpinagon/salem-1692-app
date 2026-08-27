@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ACTION, GAME_STATUS, SUB_PHASE, TRYAL } from '../src/game/constants.js';
-import { GameEngine, GameRuleError } from '../src/game/engine.js';
+import { GameEngine, GameRuleError, hydrateGameState } from '../src/game/engine.js';
 import { buildTownDeck } from '../src/game/cards.js';
 
 const rng = () => 0.314159;
@@ -149,14 +149,34 @@ test('el mazo alcanza para repartir cinco cartas a doce jugadores', () => {
   assert.ok(game.deck.length >= 20);
 });
 
-test('el mazo contiene exactamente una Conspiracion y dos cartas de Casamiento', () => {
+test('el mazo contiene una Conspiracion, un Asilo y dos cartas de Casamiento', () => {
   for (const playerCount of [4, 8, 12]) {
     const deck = buildTownDeck(playerCount);
     assert.equal(deck.filter((card) => card.key === 'CONSPIRACY').length, 1);
+    assert.equal(deck.filter((card) => card.key === 'ASYLUM').length, 1);
+    assert.equal(deck.find((card) => card.key === 'ASYLUM').id, 'ASYLUM_UNIQUE');
     assert.equal(deck.filter((card) => card.key === 'MATCHMAKER').length, 2);
     assert.equal(deck.filter((card) => card.key === 'NIGHT').length, 0);
     assert.equal(new Set(deck.map((card) => card.id)).size, deck.length);
   }
+});
+
+test('una partida anterior conserva solamente un Asilo activo', () => {
+  const game = beginDay(started());
+  const [first, second] = game.turnOrder;
+  game.players[first].blueCards.push({ id: 'asylum_active', key: 'ASYLUM', color: 'BLUE' });
+  game.players[second].hand.push({ id: 'asylum_hand', key: 'ASYLUM', color: 'BLUE' });
+  game.deck.push({ id: 'asylum_deck', key: 'ASYLUM', color: 'BLUE' });
+  game.discard.push({ id: 'asylum_discard', key: 'ASYLUM', color: 'BLUE' });
+
+  const hydrated = hydrateGameState(game);
+  const activeAsylums = [
+    ...hydrated.deck,
+    ...hydrated.discard,
+    ...Object.values(hydrated.players).flatMap((player) => [...player.hand, ...player.blueCards]),
+  ].filter((card) => card.key === 'ASYLUM');
+  assert.equal(activeAsylums.length, 1);
+  assert.equal(activeAsylums[0].id, 'asylum_active');
 });
 
 test('Coartada solo se juega sobre otro jugador y retira como maximo tres acusaciones', () => {

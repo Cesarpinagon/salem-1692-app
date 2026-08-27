@@ -15,15 +15,17 @@ export function buildTownDeck(playerCount = 4) {
   const targetSize = Math.max(40, (playerCount * 5) + 20);
   const conspiracy = getCardDefinition('CONSPIRACY');
   const matchmaker = getCardDefinition('MATCHMAKER');
-  const repeatable = DEFINITIONS.filter((card) => !['CONSPIRACY', 'MATCHMAKER', 'NIGHT'].includes(card.key));
+  const asylum = getCardDefinition('ASYLUM');
+  const repeatable = DEFINITIONS.filter((card) => !['CONSPIRACY', 'MATCHMAKER', 'ASYLUM', 'NIGHT'].includes(card.key));
   const deck = [
     { ...conspiracy, id: 'CONSPIRACY_UNIQUE' },
     { ...matchmaker, id: 'MATCHMAKER_1' },
     { ...matchmaker, id: 'MATCHMAKER_2' },
+    { ...asylum, id: 'ASYLUM_UNIQUE' },
   ];
   const copies = {};
   while (deck.length < targetSize) {
-    const definition = repeatable[(deck.length - 3) % repeatable.length];
+    const definition = repeatable[(deck.length - 4) % repeatable.length];
     copies[definition.key] = (copies[definition.key] || 0) + 1;
     deck.push({ ...definition, id: `${definition.key}_${copies[definition.key]}` });
   }
