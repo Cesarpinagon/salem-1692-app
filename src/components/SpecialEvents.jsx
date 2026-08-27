@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { EyeOff, Flame, RefreshCw, Trophy } from 'lucide-react';
+import { DoorOpen, EyeOff, Flame, RefreshCw, Trophy } from 'lucide-react';
 import { winnerLabel } from '../utils/gameLabels';
 
 const legal = (privateState, type) => privateState.legalActions?.find((action) => action.type === type);
 
-export function SpecialEvents({ game, privateState, onAction, busy }) {
+export function SpecialEvents({ game, privateState, onAction, onLeave, busy }) {
   const [conspiracyChoice, setConspiracyChoice] = useState(null);
   const tryal = legal(privateState, 'SELECT_TRYAL');
   if (game.subPhase === 'TRYAL_SELECTION' && tryal) return <Overlay><Flame className="mx-auto h-12 w-12 text-red-500" /><h2 className="mt-3 text-xl font-bold text-red-300">Selecciona una carta de Juicio</h2><p className="mt-2 text-sm text-stone-400">{game.pendingAction?.reason === 'BLACK_CAT' ? `El Gato Negro obliga a ${game.players[tryal.targetId]?.name} a revelar una carta.` : `La acusacion llevo a ${game.players[tryal.targetId]?.name} a Juicio.`}</p><div className="mt-5 grid grid-cols-2 gap-2">{tryal.tryalOptions?.map((id, index) => <button key={id} disabled={busy} onClick={() => onAction('SELECT_TRYAL', { targetId: tryal.targetId, tryalCardId: id })} className="h-24 rounded-xl border-2 border-stone-700 bg-stone-800 font-bold text-amber-200 hover:border-amber-500 disabled:opacity-50">Carta oculta {index + 1}</button>)}</div></Overlay>;
@@ -19,7 +19,7 @@ export function SpecialEvents({ game, privateState, onAction, busy }) {
   }
   if (game.phase === 'FINISHED') {
     const canReset = legal(privateState, 'RESET_GAME');
-    return <Overlay><Trophy className="mx-auto h-14 w-14 text-amber-400" /><h2 className="mt-3 font-serif text-3xl font-bold">Fin de la partida</h2><p className="mt-2 text-lg text-amber-300">Ganador: {winnerLabel(game.winner)}</p>{canReset ? <button type="button" disabled={busy} onClick={() => onAction('RESET_GAME')} className="mt-6 w-full rounded-xl bg-amber-600 px-5 py-3 font-bold text-stone-950 transition hover:bg-amber-500 disabled:cursor-wait disabled:opacity-50">{busy ? 'Reiniciando...' : 'Jugar otra vez'}</button> : <p className="mt-5 text-sm text-stone-400">Esperando a que el anfitrion inicie una nueva partida...</p>}<p className="mt-4 text-xs text-stone-500">Se conservaran la sala y los jugadores.</p></Overlay>;
+    return <Overlay><Trophy className="mx-auto h-14 w-14 text-amber-400" /><h2 className="mt-3 font-serif text-3xl font-bold">Fin de la partida</h2><p className="mt-2 text-lg text-amber-300">Ganador: {winnerLabel(game.winner)}</p>{canReset ? <button type="button" disabled={busy} onClick={() => onAction('RESET_GAME')} className="mt-6 w-full rounded-xl bg-amber-600 px-5 py-3 font-bold text-stone-950 transition hover:bg-amber-500 disabled:cursor-wait disabled:opacity-50">{busy ? 'Reiniciando...' : 'Jugar otra vez'}</button> : <p className="mt-5 text-sm text-stone-400">Esperando a que el anfitrion inicie una nueva partida...</p>}<button type="button" onClick={onLeave} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-stone-700 bg-stone-950/50 px-5 py-3 text-sm font-bold text-stone-300 transition hover:border-red-800 hover:text-red-200"><DoorOpen className="h-4 w-4" />Salir de la sala</button><p className="mt-4 text-xs text-stone-500">Jugar otra vez conserva la sala. Salir te devuelve al inicio.</p></Overlay>;
   }
   return null;
 }

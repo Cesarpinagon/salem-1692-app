@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { LogOut } from 'lucide-react';
 import { Lobby } from './components/Lobby';
 import { WaitingRoom } from './components/WaitingRoom';
 import { NightFirst } from './components/NightFirst';
@@ -51,6 +52,14 @@ export default function App() {
     finally { setBusy(false); }
   }, [busy, session, view]);
 
+  const handleLeave = useCallback(() => {
+    if (!window.confirm('¿Quieres salir de esta sala? La partida continuara para los demas jugadores.')) return;
+    clearSession();
+    setView(null);
+    setSession(null);
+    setError('');
+  }, []);
+
   if (!session) return <Lobby onCreateRoom={(name) => handleEnter(() => createGame(name))} onJoinRoom={(code, name) => handleEnter(() => joinGame(code, name))} busy={busy} error={error} />;
   if (!view) return <Loading error={error} />;
 
@@ -60,14 +69,19 @@ export default function App() {
   return (
     <main className="salem-shell min-h-screen text-stone-100">
       {error && <div role="alert" className="period-panel fixed top-3 left-1/2 z-[70] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-lg border-red-800 px-4 py-3 text-sm text-red-100">{error}</div>}
+      {game.phase !== 'FINISHED' && <LeaveControl onLeave={handleLeave} />}
       {game.phase === 'LOBBY' && <WaitingRoom roomCode={game.inviteCode} players={game.players} isHost={me?.isHost} onStartGame={() => dispatch('START_GAME')} busy={busy} />}
       {game.phase === 'DAWN' && <NightFirst game={game} privateState={privateState} onAction={dispatch} busy={busy} />}
       {game.phase === 'DAY' && <GameBoard game={game} privateState={privateState} onAction={dispatch} busy={busy} />}
       {game.phase === 'NIGHT' && <NightFirst game={game} privateState={privateState} onAction={dispatch} busy={busy} />}
-      <SpecialEvents game={game} privateState={privateState} onAction={dispatch} busy={busy} />
+      <SpecialEvents game={game} privateState={privateState} onAction={dispatch} onLeave={handleLeave} busy={busy} />
       <TimeoutControl action={privateState.legalActions?.find((item) => item.type === 'APPLY_TIMEOUT')} onApply={() => dispatch('APPLY_TIMEOUT')} busy={busy} />
     </main>
   );
+}
+
+function LeaveControl({ onLeave }) {
+  return <button type="button" onClick={onLeave} className="fixed top-3 right-3 z-[65] flex items-center gap-2 rounded-lg border border-stone-700/80 bg-stone-950/85 px-3 py-2 text-[11px] font-bold text-stone-300 shadow-lg backdrop-blur transition hover:border-red-800 hover:text-red-200"><LogOut className="h-3.5 w-3.5" />Salir del juego</button>;
 }
 
 function Loading({ error }) {
