@@ -43,10 +43,10 @@ export const cardDescription = (card) => card?.description || ({
   ROBBERY: 'Mueve toda la mano de un jugador a un tercer jugador, sin beneficiar a quien juega la carta.',
   SCAPEGOAT: 'Mueve el conjunto completo de cartas situadas frente a un jugador hacia un tercero.',
   STOCKS: 'Hace que otro jugador pierda su siguiente turno; varios Cepos se acumulan.',
-  ASYLUM: 'Protege del asesinato de las Brujas durante la Noche.',
-  MERCY: 'Impide que se jueguen directamente cartas rojas contra su portador.',
+  ASYLUM: 'Se juega frente a otro jugador y lo protege del asesinato de las Brujas durante la Noche.',
+  MERCY: 'Se juega frente a otro jugador e impide que reciba directamente cartas rojas.',
   SANCTUARY: 'Proteccion azul permanente contra el ataque de las Brujas durante la Noche.',
-  MATCHMAKER: 'Vincula mortalmente a dos portadores distintos. Si ambas cartas quedan frente a la misma persona, se descartan.',
+  MATCHMAKER: 'Se juega frente a otro jugador y vincula mortalmente a dos portadores distintos.',
   BLACK_CAT: 'Antes de Conspiración, su portador revela una carta de Juicio.',
 }[card?.key] || 'Carta de Salem.');
 
@@ -58,10 +58,10 @@ export const CARD_GLOSSARY = [
   { name: 'Robo', description: 'Pasa toda la mano de otro jugador a un tercero; quien juega Robo no puede ser origen ni destino.' },
   { name: 'Chivo Expiatorio', description: 'Mueve todas las cartas frente a otro jugador hacia un tercero; quien la juega no puede ser origen ni destino.' },
   { name: 'Cepo', description: 'Hace perder el siguiente turno y después se descarta. Los Cepos se acumulan.' },
-  { name: 'Asilo', description: 'Protege únicamente del asesinato nocturno de las Brujas.' },
-  { name: 'Piedad', description: 'Impide que su portador reciba directamente cartas rojas.' },
-  { name: 'Casamentero', description: 'Dos portadores distintos quedan vinculados mortalmente. Si ambas cartas coinciden frente a uno, se descartan.' },
-  { name: 'Gato Negro', description: 'Es una carta azul asignada en el Amanecer. Antes de Conspiración, su portador revela una carta de Juicio.' },
+  { name: 'Asilo', description: 'Se juega frente a otro jugador y protege únicamente del asesinato nocturno de las Brujas.' },
+  { name: 'Piedad', description: 'Se juega frente a otro jugador e impide que reciba directamente cartas rojas.' },
+  { name: 'Casamentero', description: 'Se juega frente a otro jugador. Dos portadores distintos quedan vinculados mortalmente.' },
+  { name: 'Gato Negro', description: 'Es la única carta azul que puede jugarse frente a uno mismo. Antes de Conspiración, su portador revela una carta de Juicio.' },
   { name: 'Conspiración', description: 'Nunca se reparte inicialmente. Después del Gato Negro, todos toman simultáneamente una carta de Juicio del jugador de su izquierda.' },
   { name: 'Noche', description: 'Es una carta negra colocada al fondo. Al robarse inicia la Noche; al terminar, el descarte se baraja y Noche vuelve al fondo.' },
 ];

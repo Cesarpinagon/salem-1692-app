@@ -209,7 +209,7 @@ test('Coartada solo se juega sobre otro jugador y retira como maximo tres acusac
   assert.ok(game.discard.some((card) => card.id === 'alibi_test'));
 });
 
-test('Asilo permanece frente al jugador elegido', () => {
+test('Asilo solo puede jugarse frente a otro jugador', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   const target = game.turnOrder.find((id) => id !== actor);
@@ -217,7 +217,8 @@ test('Asilo permanece frente al jugador elegido', () => {
 
   const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'asylum_play');
   assert.ok(action.targets.includes(target));
-  assert.ok(action.targets.includes(actor));
+  assert.ok(!action.targets.includes(actor));
+  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'asylum_play', targetId: actor }), (error) => error.code === 'INVALID_TARGET');
 
   game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'asylum_play', targetId: target });
   assert.equal(game.players[target].blueCards.some((card) => card.id === 'asylum_play'), true);
@@ -328,9 +329,11 @@ test('las cartas de Casamentero descartadas pueden volver al mazo tras la Noche'
 
 test('Casamentero requiere dos portadores distintos antes de activar el vinculo mortal', () => {
   let game = beginDay(started());
-  const actor = game.currentPlayerId;
   const witch = game.turnOrder.find((id) => game.players[id].tryalCards.some((card) => card.type === TRYAL.WITCH && !card.revealed));
-  const partner = game.turnOrder.find((id) => id !== witch);
+  const actor = game.turnOrder.find((id) => id !== witch);
+  const partner = game.turnOrder.find((id) => id !== witch && id !== actor);
+  game.currentPlayerId = actor;
+  game.turn.index = game.turnOrder.indexOf(actor);
   const definition = buildTownDeck(4).find((card) => card.key === 'MATCHMAKER');
   const firstCard = { ...definition, id: 'matchmaker_test_1' };
   const secondCard = { ...definition, id: 'matchmaker_test_2' };
@@ -648,6 +651,27 @@ test('Piedad impide jugar cartas rojas directamente contra su portador', () => {
   const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'blocked_red');
   assert.ok(!action.targets.includes(target));
   assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'blocked_red', targetId: target }), (error) => error.code === 'INVALID_TARGET');
+});
+
+test('las cartas azules no pueden jugarse sobre uno mismo salvo Gato Negro', () => {
+  for (const key of ['ASYLUM', 'MERCY', 'MATCHMAKER']) {
+    let game = beginDay(started());
+    const actor = game.currentPlayerId;
+    const card = standardCard(key, `${key.toLowerCase()}_self_blocked`);
+    game.players[actor].hand.unshift(card);
+    const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === card.id);
+    assert.ok(!action.targets.includes(actor), key);
+    assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: card.id, targetId: actor }, key), (error) => error.code === 'INVALID_TARGET');
+  }
+
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const blackCat = standardCard('BLACK_CAT', 'black_cat_self_allowed');
+  game.players[actor].hand.unshift(blackCat);
+  const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === blackCat.id);
+  assert.ok(action.targets.includes(actor));
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: blackCat.id, targetId: actor });
+  assert.ok(game.players[actor].blueCards.some((card) => card.id === blackCat.id));
 });
 
 test('Incendio descarta solo la mano del objetivo y no sus cartas frente a el', () => {

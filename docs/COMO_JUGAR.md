@@ -79,10 +79,10 @@ Los puntos se colocan frente al jugador objetivo. Cuando llega a **7 o más punt
 
 ### Cartas azules
 
-- **Asilo ×1:** protege únicamente del asesinato nocturno de las Brujas.
-- **Piedad ×1:** impide que se jueguen directamente cartas rojas contra su portador.
-- **Casamentero ×2:** dos portadores distintos quedan vinculados mortalmente. Si ambas cartas terminan frente a la misma persona, las dos se descartan.
-- **Gato Negro ×1:** se asigna durante el Amanecer y después funciona como cualquier carta azul; puede moverse, descartarse, reciclarse, robarse y volver a jugarse.
+- **Asilo ×1:** se juega frente a otro jugador y lo protege únicamente del asesinato nocturno de las Brujas.
+- **Piedad ×1:** se juega frente a otro jugador e impide que reciba directamente cartas rojas.
+- **Casamentero ×2:** se juega frente a otro jugador. Dos portadores distintos quedan vinculados mortalmente; si ambas cartas terminan frente a la misma persona, las dos se descartan.
+- **Gato Negro ×1:** es la única carta azul que puede jugarse frente a uno mismo. Se asigna durante el Amanecer y después puede moverse, descartarse, reciclarse, robarse y volver a jugarse.
 
 ### Cartas negras
 
