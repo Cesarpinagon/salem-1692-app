@@ -14,10 +14,10 @@ export function NightFirst({ game, privateState, onAction, busy }) {
   const canPassConfession = legal(privateState, 'PASS_CONFESSION');
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center gap-5 p-4 text-center">
+    <div className="night-scene mx-auto flex min-h-screen w-full max-w-none flex-col items-center justify-center gap-5 p-4 text-center">
       <div><Moon className="mx-auto mb-3 h-12 w-12 text-purple-400" /><p className="text-xs font-bold uppercase tracking-[.3em] text-purple-400">{game.phase === 'DAWN' ? 'Amanecer secreto' : subPhaseLabel(game.subPhase)}</p><h1 className="mt-2 font-serif text-3xl font-bold">Protege tu pantalla</h1><p className="mt-2 text-sm text-stone-400">La informacion de esta vista solo fue enviada a {me?.name}.</p></div>
 
-      <section className="w-full rounded-2xl border border-purple-900 bg-stone-900 p-5 shadow-2xl">
+      <section className="period-panel w-full max-w-3xl rounded-2xl border-purple-900 p-5 shadow-2xl">
         {revealed ? <Identity privateState={privateState} /> : <div className="py-8"><EyeOff className="mx-auto h-12 w-12 text-stone-600" /><p className="mt-2 text-sm text-stone-500">Identidad oculta</p></div>}
         <button onClick={() => setRevealed(!revealed)} className="mt-3 text-xs text-stone-400 underline">{revealed ? <EyeOff className="mr-1 inline h-4 w-4" /> : <Eye className="mr-1 inline h-4 w-4" />}{revealed ? 'Ocultar' : 'Revelar mi informacion'}</button>
       </section>

@@ -47,7 +47,7 @@ export const CARD_GLOSSARY = [
   { name: 'Casamiento', description: 'Hay dos cartas que aparecen una sola vez por partida. Cada una se asigna a una persona distinta; el vinculo mortal solo se activa cuando ambas han sido asignadas.' },
   { name: 'Amanecer', description: 'Permite al Alguacil proteger secretamente a un jugador del ataque nocturno de las Brujas.' },
   { name: 'Noche', description: 'La fase comienza automaticamente cuando un jugador roba la ultima carta del mazo principal.' },
-  { name: 'Gato Negro', description: 'Maldice a un jugador y lo obliga a revelar inmediatamente una carta de Juicio.' },
+  { name: 'Gato Negro', description: 'Al terminar una Conspiracion, obliga a quien lo tenga a revelar una carta de Juicio. Asignarlo al inicio no revela ninguna carta.' },
   { name: 'Conspiracion', description: 'Cada jugador toma una carta de Juicio oculta del jugador a su izquierda. Recibir una Bruja te convierte en Bruja.' },
   { name: 'Asilo / Proteccion', description: 'Carta azul permanente que protege contra acusaciones y ataques de la Noche.' },
   { name: 'Acusaciones', description: 'Las cartas rojas suman puntos frente a un jugador; al llegar a 7 provocan un Juicio.' },

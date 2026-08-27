@@ -241,10 +241,9 @@ function selectBlackCat(game, playerId, targetId, at) {
   assertRule(game.players[playerId].alive && game.players[playerId].isCurrentWitch, 'NOT_ALLOWED', 'Solo la Bruja actual puede elegir el Gato Negro.');
   assertRule(game.players[targetId]?.alive && targetId !== playerId, 'INVALID_TARGET', 'Debes asignar el Gato Negro a otro jugador vivo.');
   game.turnOrder.forEach((id) => { game.players[id].hasBlackCat = id === targetId; });
-  game.subPhase = SUB_PHASE.TRYAL_SELECTION;
-  game.pendingActions = { accusedId: targetId, accuserId: targetId, resumeAfter: 'BLACK_CAT' };
-  setDecisionTimer(game, at);
-  publicEvent(game, 'BLACK_CAT_ASSIGNED', `${game.players[targetId].name} recibio el Gato Negro y debe revelar una carta de Juicio.`, { targetId }, at);
+  game.pendingActions = {};
+  publicEvent(game, 'BLACK_CAT_ASSIGNED', `${game.players[targetId].name} recibio el Gato Negro. Su efecto se activara cuando aparezca Conspiracion.`, { targetId }, at);
+  beginDay(game, at);
 }
 
 function validTargets(game, playerId, card) {
@@ -405,7 +404,7 @@ function playCard(game, playerId, payload, at) {
   if (card.color === CARD_COLOR.RED) game.discard.push(card);
 }
 
-function revealTryal(game, playerId, payload, at) {
+function revealTryal(game, playerId, payload, rng, at) {
   const { accusedId, accuserId } = game.pendingActions;
   const resumeAfter = game.pendingActions.resumeAfter;
   assertRule(playerId === accuserId, 'NOT_ALLOWED', 'Solo quien provoco el juicio puede elegir.');
@@ -422,6 +421,7 @@ function revealTryal(game, playerId, payload, at) {
   checkVictory(game, at);
   if (game.status !== GAME_STATUS.FINISHED && game.subPhase !== SUB_PHASE.LAST_WORDS) {
     if (resumeAfter === 'BLACK_CAT') beginDay(game, at);
+    else if (resumeAfter === 'CONSPIRACY') continueAfterConspiracy(game, rng, at);
     else {
       game.subPhase = SUB_PHASE.PLAY_CARDS;
       game.pendingActions = {};
@@ -476,6 +476,7 @@ function killPlayer(game, playerId, reason, at) {
 
 function finishLastWords(game, playerId, rng, at) {
   const deceasedId = game.pendingActions.deceasedId;
+  const resumeActions = game.pendingActions.resumeActions || {};
   assertRule(playerId === deceasedId || game.players[playerId]?.isHost, 'NOT_ALLOWED', 'No puedes cerrar las ultimas palabras.');
   game.players[deceasedId].canCommunicate = false;
   if (game.status === GAME_STATUS.FINISHED) {
@@ -484,8 +485,9 @@ function finishLastWords(game, playerId, rng, at) {
     game.timers.phaseEndsAt = null;
     return;
   }
-  if (game.pendingActions.resumePhase === GAME_STATUS.NIGHT) {
-    game.pendingActions = game.pendingActions.resumeActions || {};
+  if (resumeActions.resumeAfter === 'CONSPIRACY') continueAfterConspiracy(game, rng, at);
+  else if (game.pendingActions.resumePhase === GAME_STATUS.NIGHT) {
+    game.pendingActions = resumeActions;
     game.pendingActions.witchVotes ||= {};
     game.pendingActions.confessions ||= {};
     game.pendingActions.confessionResponses ||= {};
@@ -510,6 +512,16 @@ function conspiracySourceId(game, playerId) {
   const alive = game.turnOrder.filter((id) => game.players[id].alive);
   const playerIndex = alive.indexOf(playerId);
   return playerIndex < 0 ? null : alive[(playerIndex - 1 + alive.length) % alive.length];
+}
+
+function continueAfterConspiracy(game, rng, at) {
+  game.pendingActions = {};
+  if (game.pendingNightAfterDraw) startNight(game, at, game.interruptedTurn);
+  else if (game.interruptedTurn) resumeInterruptedDraw(game, rng, at);
+  else {
+    game.subPhase = SUB_PHASE.WAITING_ACTION;
+    endTurn(game, at);
+  }
 }
 
 function chooseConspiracyCard(game, playerId, payload, rng, at) {
@@ -538,13 +550,14 @@ function chooseConspiracyCard(game, playerId, payload, rng, at) {
   recalculateRoles(game, at);
   checkVictory(game, at);
   if (game.status !== GAME_STATUS.FINISHED) {
-    game.pendingActions = {};
-    if (game.pendingNightAfterDraw) startNight(game, at, game.interruptedTurn);
-    else if (game.interruptedTurn) resumeInterruptedDraw(game, rng, at);
-    else {
-      game.subPhase = SUB_PHASE.WAITING_ACTION;
-      endTurn(game, at);
-    }
+    const blackCatId = alive.find((id) => game.players[id].hasBlackCat
+      && game.players[id].tryalCards.some((card) => !card.revealed));
+    if (blackCatId) {
+      game.subPhase = SUB_PHASE.TRYAL_SELECTION;
+      game.pendingActions = { accusedId: blackCatId, accuserId: blackCatId, resumeAfter: 'CONSPIRACY' };
+      setDecisionTimer(game, at);
+      publicEvent(game, 'BLACK_CAT_REVEAL', `${game.players[blackCatId].name} debe revelar una carta de Juicio por tener el Gato Negro durante Conspiracion.`, { targetId: blackCatId }, at);
+    } else continueAfterConspiracy(game, rng, at);
   }
 }
 
@@ -705,7 +718,7 @@ function applyTimeout(game, playerId, rng, at) {
   else if (game.subPhase === SUB_PHASE.TRYAL_SELECTION) {
     const accusedId = game.pendingActions.accusedId;
     const card = game.players[accusedId].tryalCards.find((item) => !item.revealed);
-    revealTryal(game, game.pendingActions.accuserId, { targetId: accusedId, tryalCardId: card.id }, at);
+    revealTryal(game, game.pendingActions.accuserId, { targetId: accusedId, tryalCardId: card.id }, rng, at);
   } else if (game.subPhase === SUB_PHASE.CONSPIRACY_RESOLUTION) {
     const alive = game.turnOrder.filter((id) => game.players[id].alive);
     alive.filter((id) => !game.pendingActions.conspiracySelections[id]).forEach((id) => {
@@ -731,7 +744,7 @@ export function executeAction(gameInput, playerId, action, options = {}) {
     case ACTION.DRAW_CARDS: drawCards(game, playerId, rng, at); break;
     case ACTION.PLAY_CARD: playCard(game, playerId, action.payload || {}, at); break;
     case ACTION.END_TURN: endTurn(game, at); break;
-    case ACTION.SELECT_TRYAL: revealTryal(game, playerId, action.payload || {}, at); break;
+    case ACTION.SELECT_TRYAL: revealTryal(game, playerId, action.payload || {}, rng, at); break;
     case ACTION.SELECT_CONSPIRACY_CARD: chooseConspiracyCard(game, playerId, action.payload || {}, rng, at); break;
     case ACTION.SELECT_WITCH_VICTIM: selectWitchVictim(game, playerId, action.payload?.targetId, at); break;
     case ACTION.SELECT_CONSTABLE_PROTECTION: selectProtection(game, playerId, action.payload?.targetId, at); break;
@@ -792,7 +805,11 @@ export function buildPlayerView(game, playerId) {
 }
 
 function buildPublicPendingAction(game) {
-  if (game.subPhase === SUB_PHASE.TRYAL_SELECTION) return { accusedId: game.pendingActions.accusedId, accuserId: game.pendingActions.accuserId, reason: game.pendingActions.resumeAfter || 'ACCUSATION' };
+  if (game.subPhase === SUB_PHASE.TRYAL_SELECTION) return {
+    accusedId: game.pendingActions.accusedId,
+    accuserId: game.pendingActions.accuserId,
+    reason: game.pendingActions.resumeAfter === 'CONSPIRACY' ? 'BLACK_CAT' : game.pendingActions.resumeAfter || 'ACCUSATION',
+  };
   if (game.subPhase === SUB_PHASE.LAST_WORDS) return { deceasedId: game.pendingActions.deceasedId };
   return null;
 }
