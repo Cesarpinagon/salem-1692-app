@@ -110,8 +110,9 @@ test('PlayerView nunca filtra manos ni Tryal ocultas ajenas', () => {
   assert.ok(view.privateState.hand.length);
   assert.ok(view.privateState.tryalCards.length);
   assert.equal('protectedTonight' in view.privateState, false);
-  Object.values(view.publicState.players).forEach((player) => {
+  Object.entries(view.publicState.players).forEach(([id, player]) => {
     assert.equal('hand' in player, false);
+    assert.equal(player.handCount, game.players[id].hand.length);
     assert.equal('tryalCards' in player, false);
     assert.equal('hasEverBeenWitch' in player, false);
     assert.equal('firebaseUid' in player, false);
@@ -585,6 +586,9 @@ test('proteccion del Alguacil evita la muerte nocturna y se limpia al amanecer',
   assert.equal(game.players[victim].alive, true);
   assert.equal(game.players[victim].protectedTonight, false);
   assert.equal(game.phase, GAME_STATUS.DAY);
+  const protectionReveal = game.history.find((entry) => entry.type === 'CONSTABLE_PROTECTION_REVEALED');
+  assert.equal(protectionReveal.data.targetId, victim);
+  assert.match(protectionReveal.message, new RegExp(game.players[victim].name));
 });
 
 test('Asilo impide el ataque de la Noche y permanece despues del amanecer', () => {

@@ -58,7 +58,7 @@ En su turno, un jugador elige entre:
 - **Robar dos cartas:** las cartas se resuelven una por una y el turno termina automáticamente al completar el robo.
 - **Jugar cartas de su mano:** puede jugar cartas legales y después debe pulsar **Terminar** para cerrar su turno.
 
-La aplicación ilumina únicamente las cartas y objetivos permitidos. Si una carta necesita uno o dos objetivos, selecciónalos en el tablero antes de confirmar.
+La aplicación ilumina únicamente las cartas y objetivos permitidos. Si una carta necesita uno o dos objetivos, selecciónalos en el tablero antes de confirmar. El tablero muestra públicamente cuántas cartas jugables tiene cada jugador en la mano, pero nunca revela su contenido.
 
 ### Cartas rojas: acusaciones
 
@@ -115,6 +115,8 @@ La aplicación guía las decisiones en este orden:
 4. **Ataque:** se resuelve la votación de las Brujas.
 
 Una confesión válida protege al jugador durante esa Noche. Revelar una carta de Bruja al confesar provoca la muerte inmediata. El ataque nocturno falla si la víctima fue protegida por el Alguacil, confesó o tiene Asilo.
+
+Al terminar la Noche, el historial público anuncia a qué jugador defendió el Alguacil. La elección permanece secreta mientras la Noche está en curso.
 
 ## 9. Casamentero y muerte compartida
 

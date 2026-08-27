@@ -782,6 +782,7 @@ function resolveNight(game, rng, at) {
 }
 
 function cleanupNight(game, rng, at) {
+  const protectedPlayerId = game.pendingActions.protection;
   game.turnOrder.forEach((id) => {
     game.players[id].protectedTonight = false;
     game.players[id].confessedTonight = false;
@@ -792,6 +793,9 @@ function cleanupNight(game, rng, at) {
   game.pendingActions = {};
   recycleDiscard(game, rng);
   publicEvent(game, EVENT.NIGHT_ENDED, 'Termino la noche.', {}, at);
+  if (protectedPlayerId && game.players[protectedPlayerId]) {
+    publicEvent(game, EVENT.CONSTABLE_PROTECTION_REVEALED, `El Alguacil defendio a ${game.players[protectedPlayerId].name} durante la Noche.`, { targetId: protectedPlayerId }, at);
+  }
   checkVictory(game, at);
   if (game.status !== GAME_STATUS.FINISHED) {
     if (game.interruptedTurn) resumeInterruptedDraw(game, rng, at);
@@ -902,7 +906,7 @@ export function executeAction(gameInput, playerId, action, options = {}) {
 function publicPlayer(player) {
   return {
     id: player.id, name: player.name, alive: player.alive, connected: player.connected, isHost: player.isHost,
-    character: player.character, tryalCardCount: player.tryalCards.filter((card) => !card.revealed).length,
+    character: player.character, handCount: player.hand.length, tryalCardCount: player.tryalCards.filter((card) => !card.revealed).length,
     revealedTryalCards: player.tryalCards.filter((card) => card.revealed).map(({ id, type, revealed }) => ({ id, type, revealed })),
     blueCards: player.blueCards, accusations: player.accusations, accusationTotal: player.accusationTotal,
     hasBlackCat: player.hasBlackCat, canCommunicate: player.canCommunicate, deathReason: player.deathReason,
