@@ -40,11 +40,11 @@ export const cardDescription = (card) => card?.description || ({
   ALIBI: 'Retira todas tus acusaciones acumuladas.',
   ASYLUM: 'Proteccion azul permanente contra acusaciones y ataques de la Noche.',
   SANCTUARY: 'Proteccion azul permanente contra acusaciones y ataques de la Noche.',
-  MATCHMAKER: 'Vincula a dos jugadores; si uno muere, el otro muere inmediatamente.',
+  MATCHMAKER: 'Asigna la carta a una persona. Cuando dos personas distintas tengan una, quedaran casadas y compartiran un vinculo mortal.',
 }[card?.key] || 'Carta de Salem.');
 
 export const CARD_GLOSSARY = [
-  { name: 'Casamiento', description: 'Permite vincular a dos jugadores. Si cualquiera de los dos muere por cualquier causa, el otro muere automaticamente.' },
+  { name: 'Casamiento', description: 'Hay dos cartas. Cada una se asigna a una persona distinta; el vinculo mortal solo se activa cuando ambas han sido asignadas.' },
   { name: 'Amanecer', description: 'Permite al Alguacil proteger secretamente a un jugador del ataque nocturno de las Brujas.' },
   { name: 'Noche', description: 'La fase comienza automaticamente cuando un jugador roba la ultima carta del mazo principal.' },
   { name: 'Gato Negro', description: 'Maldice a un jugador y lo obliga a revelar inmediatamente una carta de Juicio.' },

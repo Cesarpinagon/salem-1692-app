@@ -24,7 +24,7 @@ export function hydrateGameState(gameInput) {
   game.interruptedTurn ||= null;
   game.pendingNightAfterDraw ??= false;
   Object.values(game.players).forEach((player) => {
-    ['hand', 'tryalCards', 'blueCards', 'accusations', 'secretInformation'].forEach((field) => {
+    ['hand', 'tryalCards', 'blueCards', 'matchmakerCards', 'accusations', 'secretInformation'].forEach((field) => {
       player[field] = Array.isArray(player[field]) ? player[field] : [];
     });
     player.alive ??= true;
@@ -99,7 +99,7 @@ function playerTemplate({ id, firebaseUid, name, isHost = false }) {
     id, firebaseUid, name, alive: true, connected: true, isHost, character: null, hand: [], tryalCards: [],
     blueCards: [], accusations: [], accusationTotal: 0, hasEverBeenWitch: false, isCurrentWitch: false,
     isCurrentConstable: false, hasBlackCat: false, protectedTonight: false, confessedTonight: false,
-    canCommunicate: true, secretInformation: [], deathReason: null, marriedTo: null, lastConspiracyCard: null,
+    canCommunicate: true, secretInformation: [], deathReason: null, matchmakerCards: [], marriedTo: null, lastConspiracyCard: null,
   };
 }
 
@@ -249,6 +249,7 @@ function selectBlackCat(game, playerId, targetId, at) {
 function validTargets(game, playerId, card) {
   const alive = game.turnOrder.filter((id) => game.players[id].alive
     && (card.color !== CARD_COLOR.RED || (game.players[id].tryalCards.some((tryal) => !tryal.revealed) && !hasAsylum(game.players[id]))));
+  if (card.key === 'MATCHMAKER') return alive.filter((id) => !game.players[id].marriedTo && game.players[id].matchmakerCards.length === 0);
   if (card.targetRules === 'SELF') return [playerId];
   if (card.targetRules === 'OTHER_PLAYER') return alive.filter((id) => id !== playerId);
   if (card.targetRules === 'ANY_ALIVE_PLAYER') return alive;
@@ -373,12 +374,23 @@ function playCard(game, playerId, payload, at) {
     game.players[targetId].accusationTotal = 0;
     game.discard.push(card);
   } else if (card.key === 'MATCHMAKER') {
-    const [firstId, secondId] = targetIds;
-    game.players[firstId].marriedTo = secondId;
-    game.players[secondId].marriedTo = firstId;
-    game.effects.push({ type: 'MARRIAGE', sourceId: playerId, targetIds, visibility: 'PUBLIC', duration: 'PERMANENT' });
-    game.discard.push(card);
-    publicEvent(game, EVENT.MARRIAGE_CREATED, `${game.players[firstId].name} y ${game.players[secondId].name} quedaron unidos por Casamiento.`, { playerIds: targetIds }, at);
+    game.players[targetId].matchmakerCards.push(card);
+    publicEvent(game, EVENT.MARRIAGE_CARD_ASSIGNED, `${game.players[playerId].name} asigno una carta de Casamiento a ${game.players[targetId].name}.`, { playerId, targetId, cardId: card.id }, at);
+    const assignedIds = game.turnOrder.filter((id) => game.players[id].alive
+      && !game.players[id].marriedTo && game.players[id].matchmakerCards.length > 0);
+    if (assignedIds.length === 2) {
+      const [firstId, secondId] = assignedIds;
+      game.players[firstId].marriedTo = secondId;
+      game.players[secondId].marriedTo = firstId;
+      game.effects.push({
+        type: 'MARRIAGE',
+        targetIds: assignedIds,
+        cardIds: assignedIds.flatMap((id) => game.players[id].matchmakerCards.map((item) => item.id)),
+        visibility: 'PUBLIC',
+        duration: 'PERMANENT',
+      });
+      publicEvent(game, EVENT.MARRIAGE_CREATED, `${game.players[firstId].name} y ${game.players[secondId].name} quedaron unidos por Casamiento.`, { playerIds: assignedIds }, at);
+    }
   } else if (card.color === CARD_COLOR.BLUE) {
     game.players[targetId].blueCards.push(card);
   } else {
@@ -418,9 +430,10 @@ function eliminatePlayer(game, playerId, reason) {
   player.deathReason = reason;
   player.wasWitchAnnounced = player.hasEverBeenWitch || player.tryalCards.some((card) => card.type === TRYAL.WITCH);
   player.tryalCards.forEach((card) => { card.revealed = true; });
-  game.discard.push(...player.hand, ...player.blueCards);
+  game.discard.push(...player.hand, ...player.blueCards, ...player.matchmakerCards);
   player.hand = [];
   player.blueCards = [];
+  player.matchmakerCards = [];
   game.effects = game.effects.filter((effect) => effect.sourceId !== playerId && effect.targetId !== playerId && !effect.targetIds?.includes(playerId));
   return true;
 }
@@ -736,7 +749,8 @@ function publicPlayer(player) {
     revealedTryalCards: player.tryalCards.filter((card) => card.revealed).map(({ id, type, revealed }) => ({ id, type, revealed })),
     blueCards: player.blueCards, accusations: player.accusations, accusationTotal: player.accusationTotal,
     hasBlackCat: player.hasBlackCat, canCommunicate: player.canCommunicate, deathReason: player.deathReason,
-    marriedTo: player.marriedTo, wasEverWitch: player.alive ? undefined : player.wasWitchAnnounced,
+    matchmakerCardCount: player.matchmakerCards.length, marriedTo: player.marriedTo,
+    wasEverWitch: player.alive ? undefined : player.wasWitchAnnounced,
   };
 }
 
