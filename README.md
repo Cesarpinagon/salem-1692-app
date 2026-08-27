@@ -117,8 +117,8 @@ El servidor genera un ID interno y un codigo de invitacion independiente. Accion
 
 ## Pruebas
 
-Las pruebas del motor cubren: host y cantidad de jugadores, mazo para hasta 12 jugadores, asignacion de roles, privacidad, idempotencia, conflicto de version, puntos exactos de acusacion, Conspiracy simultanea, reanudacion de robos interrumpidos, transferencia de Witch/Constable, juicio a 7 puntos, muerte centralizada, ambas victorias, proteccion nocturna, confesion y avance de ronda.
+Las pruebas del motor cubren: composición exacta del mazo estándar de 59 cartas, preparación y manos de tres cartas para 4 a 12 jugadores, cantidades variables de cartas de Juicio, privacidad, idempotencia, objetivos y efectos de todas las cartas, Conspiración simultánea, Gato Negro antes del intercambio, Noche y reciclado, juicios, muertes vinculadas, ambas victorias, protección nocturna, confesión y avance de ronda.
 
 `npm run simulate` crea cuatro usuarios reales en Emulator Suite, inicia una sala y ejecuta decisiones legales hasta que existe un ganador. `npm run test:api` verifica autenticacion, creacion, union y arranque mediante los mismos endpoints usados en Vercel.
 
-Las reglas exactas de cartas y personajes adicionales deben definirse antes de implementarse con: trigger, condiciones, objetivos, efecto, duracion, visibilidad, prioridad y cleanup.
+Cada carta del mazo estándar está definida con su cantidad, color, activación, objetivos, duración y limpieza correspondientes en el motor.

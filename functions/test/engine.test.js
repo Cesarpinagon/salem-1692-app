@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ACTION, GAME_STATUS, SUB_PHASE, TRYAL } from '../src/game/constants.js';
 import { GameEngine, GameRuleError, hydrateGameState } from '../src/game/engine.js';
-import { buildTownDeck } from '../src/game/cards.js';
+import { buildTownDeck, STANDARD_DECK_COUNTS } from '../src/game/cards.js';
 
 const rng = () => 0.314159;
 
@@ -20,15 +20,19 @@ function started() {
   return act(lobby(), 'p1', ACTION.START_GAME);
 }
 
+function standardCard(key, id = `${key.toLowerCase()}_test`) {
+  return { ...buildTownDeck().find((card) => card.key === key), id };
+}
+
 function beginDay(game) {
   const selector = game.turnOrder.find((id) => game.players[id].isCurrentWitch) || 'p1';
   const target = game.turnOrder.find((id) => id !== selector && game.players[id].tryalCards.some((card) => card.type === TRYAL.NOT_WITCH && !card.revealed));
   return act(game, selector, ACTION.SELECT_BLACK_CAT, { targetId: target });
 }
 
-function revealBlackCatAfterConspiracy(game, suffix = '') {
+function revealBlackCatBeforeConspiracy(game, suffix = '') {
   assert.equal(game.subPhase, SUB_PHASE.TRYAL_SELECTION);
-  assert.equal(game.pendingActions.resumeAfter, 'CONSPIRACY');
+  assert.equal(game.pendingActions.resumeAfter, 'CONSPIRACY_START');
   const target = game.pendingActions.accusedId;
   const card = game.players[target].tryalCards.find((item) => item.type === TRYAL.NOT_WITCH && !item.revealed)
     || game.players[target].tryalCards.find((item) => !item.revealed);
@@ -140,23 +144,26 @@ test('solo la bruja actual puede asignar Black Cat', () => {
   assert.throws(() => act(game, nonWitch, ACTION.SELECT_BLACK_CAT, { targetId: 'p1' }), (error) => error.code === 'NOT_ALLOWED');
 });
 
-test('el mazo alcanza para repartir cinco cartas a doce jugadores', () => {
+test('el mazo estandar alcanza para repartir tres cartas a doce jugadores', () => {
   let game = GameEngine.createGame({ id: 'BIG', inviteCode: 'BIG012', host: { id: 'p1', firebaseUid: 'u1', name: 'Host' }, now: 1 });
   for (let n = 2; n <= 12; n += 1) game = GameEngine.addPlayer(game, { id: `p${n}`, firebaseUid: `u${n}`, name: `Player ${n}` }, n);
   game = act(game, 'p1', ACTION.START_GAME);
   assert.equal(game.turnOrder.length, 12);
-  assert.ok(game.turnOrder.every((id) => game.players[id].hand.length === 5));
+  assert.ok(game.turnOrder.every((id) => game.players[id].hand.length === 3));
   assert.ok(game.deck.length >= 20);
 });
 
-test('el mazo contiene una Conspiracion, un Asilo y dos cartas de Casamiento', () => {
+test('el mazo estandar contiene exactamente las 59 cartas y colores requeridos', () => {
   for (const playerCount of [4, 8, 12]) {
     const deck = buildTownDeck(playerCount);
-    assert.equal(deck.filter((card) => card.key === 'CONSPIRACY').length, 1);
-    assert.equal(deck.filter((card) => card.key === 'ASYLUM').length, 1);
-    assert.equal(deck.find((card) => card.key === 'ASYLUM').id, 'ASYLUM_UNIQUE');
-    assert.equal(deck.filter((card) => card.key === 'MATCHMAKER').length, 2);
-    assert.equal(deck.filter((card) => card.key === 'NIGHT').length, 0);
+    assert.equal(deck.length, 59);
+    Object.entries(STANDARD_DECK_COUNTS).forEach(([key, count]) => assert.equal(deck.filter((card) => card.key === key).length, count, key));
+    assert.deepEqual(Object.fromEntries(['RED', 'GREEN', 'BLUE', 'BLACK'].map((color) => [color, deck.filter((card) => card.color === color).length])), {
+      RED: 41, GREEN: 11, BLUE: 5, BLACK: 2,
+    });
+    assert.equal(deck.find((card) => card.key === 'MATCHMAKER').color, 'BLUE');
+    assert.equal(deck.find((card) => card.key === 'BLACK_CAT').color, 'BLUE');
+    assert.equal(deck.find((card) => card.key === 'NIGHT').color, 'BLACK');
     assert.equal(new Set(deck.map((card) => card.id)).size, deck.length);
   }
 });
@@ -194,14 +201,15 @@ test('Coartada solo se juega sobre otro jugador y retira como maximo tres acusac
   assert.ok(action.targets.includes(target));
   assert.ok(!action.targets.includes(actor));
   assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'alibi_test', targetId: actor }), (error) => error.code === 'INVALID_TARGET');
+  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'alibi_test', targetId: target, accusationCardIds: ['red_1', 'red_2', 'red_3', 'red_4'] }), (error) => error.code === 'INVALID_ACCUSATIONS');
 
-  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'alibi_test', targetId: target });
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'alibi_test', targetId: target, accusationCardIds: ['red_1', 'red_2', 'red_3'] });
   assert.equal(game.players[target].accusations.length, 1);
   assert.equal(game.players[target].accusationTotal, 1);
   assert.ok(game.discard.some((card) => card.id === 'alibi_test'));
 });
 
-test('Asilo solo se coloca frente a otro jugador y permanece protegiendolo', () => {
+test('Asilo permanece frente al jugador elegido', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   const target = game.turnOrder.find((id) => id !== actor);
@@ -209,8 +217,7 @@ test('Asilo solo se coloca frente a otro jugador y permanece protegiendolo', () 
 
   const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'asylum_play');
   assert.ok(action.targets.includes(target));
-  assert.ok(!action.targets.includes(actor));
-  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'asylum_play', targetId: actor }), (error) => error.code === 'INVALID_TARGET');
+  assert.ok(action.targets.includes(actor));
 
   game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'asylum_play', targetId: target });
   assert.equal(game.players[target].blueCards.some((card) => card.id === 'asylum_play'), true);
@@ -255,7 +262,7 @@ test('Conspiracion vuelve una sola vez al mazo al terminar la Noche', () => {
   assert.equal(game.discard.filter((card) => card.key === 'CONSPIRACY').length, 0);
 });
 
-test('la Noche no comienza mientras queden cartas en el mazo principal', () => {
+test('la carta Noche inicia la fase inmediatamente aunque haya cartas posteriores', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   game.deck = [
@@ -264,46 +271,45 @@ test('la Noche no comienza mientras queden cartas en el mazo principal', () => {
     { id: 'still_in_deck', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
   ];
   game = act(game, actor, ACTION.DRAW_CARDS);
-  assert.equal(game.phase, GAME_STATUS.DAY);
-  assert.equal(game.deck.length, 1);
-  assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 0);
-});
-
-test('la Noche comienza exactamente al robar la ultima carta del mazo principal', () => {
-  let game = beginDay(started());
-  const actor = game.currentPlayerId;
-  game.deck = [{ id: 'last_main_card', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' }];
-  game = act(game, actor, ACTION.DRAW_CARDS);
   assert.equal(game.phase, GAME_STATUS.NIGHT);
-  assert.equal(game.subPhase, SUB_PHASE.WITCH_SELECTION);
-  assert.equal(game.deck.length, 0);
-  assert.deepEqual(game.interruptedTurn, { playerId: actor, remainingDraws: 1 });
+  assert.equal(game.deck.length, 2);
   assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 1);
 });
 
-test('si la ultima carta es Conspiracion, se resuelve antes de comenzar la Noche', () => {
+test('agotar exactamente dos cartas normales no inicia la Noche por si solo', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  game.deck = [
+    { id: 'normal_one', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+    { id: 'normal_two', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+  ];
+  game.discard = [{ id: 'night_recycled', key: 'NIGHT', name: 'Noche', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'NONE' }];
+  game = act(game, actor, ACTION.DRAW_CARDS);
+  assert.equal(game.phase, GAME_STATUS.DAY);
+  assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 0);
+});
+
+test('Conspiracion obliga al Gato Negro a revelar antes del intercambio', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   game.deck = [{ id: 'last_conspiracy', key: 'CONSPIRACY', name: 'Conspiracion', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'TRYAL_CARD' }];
   game = act(game, actor, ACTION.DRAW_CARDS);
+  assert.equal(game.subPhase, SUB_PHASE.TRYAL_SELECTION);
+  game = revealBlackCatBeforeConspiracy(game, 'before_exchange');
   assert.equal(game.subPhase, SUB_PHASE.CONSPIRACY_RESOLUTION);
-  assert.equal(game.pendingNightAfterDraw, true);
   for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) {
     game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
   }
-  game = revealBlackCatAfterConspiracy(game, 'before_night');
-  assert.equal(game.phase, GAME_STATUS.NIGHT);
-  assert.equal(game.subPhase, SUB_PHASE.WITCH_SELECTION);
-  assert.equal(game.pendingNightAfterDraw, false);
-  assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 1);
+  assert.equal(game.phase, GAME_STATUS.DAY);
+  assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 0);
 });
 
-test('las cartas de Casamiento no vuelven al mazo cuando se recicla el descarte', () => {
+test('las cartas de Casamentero descartadas pueden volver al mazo tras la Noche', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   const definition = buildTownDeck(4).find((card) => card.key === 'MATCHMAKER');
   const spentIds = ['spent_matchmaker_1', 'spent_matchmaker_2'];
-  game.deck = [];
+  game.deck = [{ id: 'night_now', key: 'NIGHT', name: 'Noche', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'NONE' }];
   game.discard = [
     { ...definition, id: spentIds[0] },
     { id: 'reusable_1', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
@@ -313,14 +319,14 @@ test('las cartas de Casamiento no vuelven al mazo cuando se recicla el descarte'
   ];
 
   game = act(game, actor, ACTION.DRAW_CARDS);
-
-  assert.ok(spentIds.every((id) => game.retiredCards.some((card) => card.id === id)));
-  assert.ok(!game.deck.some((card) => card.key === 'MATCHMAKER'));
-  assert.ok(!game.players[actor].hand.some((card) => spentIds.includes(card.id)));
-  assert.equal(game.deck.length, 1);
+  game.status = GAME_STATUS.NIGHT; game.phase = GAME_STATUS.NIGHT; game.subPhase = SUB_PHASE.CONFESSION;
+  game.pendingActions = { witchVotes: {}, protection: null, confessions: {}, confessionResponses: {} };
+  for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) game = act(game, id, ACTION.PASS_CONFESSION, {}, id);
+  assert.ok(spentIds.every((id) => game.deck.some((card) => card.id === id)));
+  assert.equal(game.deck.at(-1).key, 'NIGHT');
 });
 
-test('Casamiento requiere asignar sus dos cartas a personas distintas antes de activar el vinculo mortal', () => {
+test('Casamentero requiere dos portadores distintos antes de activar el vinculo mortal', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   const witch = game.turnOrder.find((id) => game.players[id].tryalCards.some((card) => card.type === TRYAL.WITCH && !card.revealed));
@@ -335,7 +341,7 @@ test('Casamiento requiere asignar sus dos cartas a personas distintas antes de a
   assert.ok(firstAction.targets.includes(witch));
   game = act(game, actor, ACTION.PLAY_CARD, { cardId: firstCard.id, targetId: witch });
 
-  assert.equal(game.players[witch].matchmakerCards.length, 1);
+  assert.equal(game.players[witch].blueCards.filter((card) => card.key === 'MATCHMAKER').length, 1);
   assert.equal(game.players[witch].marriedTo, null);
   assert.equal(game.players[partner].marriedTo, null);
   assert.equal(game.history.filter((entry) => entry.type === 'MARRIAGE_CARD_ASSIGNED').length, 1);
@@ -344,9 +350,8 @@ test('Casamiento requiere asignar sus dos cartas a personas distintas antes de a
 
   const secondAction = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === secondCard.id);
   assert.equal(secondAction.targetCount, 1);
-  assert.ok(!secondAction.targets.includes(witch));
+  assert.ok(secondAction.targets.includes(witch));
   assert.ok(secondAction.targets.includes(partner));
-  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: secondCard.id, targetId: witch }), (error) => error.code === 'INVALID_TARGET');
 
   const beforeMarriage = structuredClone(game);
   beforeMarriage.subPhase = SUB_PHASE.TRYAL_SELECTION;
@@ -355,13 +360,12 @@ test('Casamiento requiere asignar sus dos cartas a personas distintas antes de a
   const deathBeforeMarriage = act(beforeMarriage, actor, ACTION.SELECT_TRYAL, { targetId: witch, tryalCardId: pendingWitchCard.id }, 'before_marriage');
   assert.equal(deathBeforeMarriage.players[witch].alive, false);
   assert.equal(deathBeforeMarriage.players[partner].alive, true);
-  assert.ok(deathBeforeMarriage.retiredCards.some((card) => card.id === firstCard.id));
-  assert.ok(!deathBeforeMarriage.discard.some((card) => card.id === firstCard.id));
+  assert.ok(deathBeforeMarriage.discard.some((card) => card.id === firstCard.id));
 
   game = act(game, actor, ACTION.PLAY_CARD, { cardId: secondCard.id, targetId: partner });
   assert.equal(game.players[witch].marriedTo, partner);
   assert.equal(game.players[partner].marriedTo, witch);
-  assert.equal(game.players[partner].matchmakerCards.length, 1);
+  assert.equal(game.players[partner].blueCards.filter((card) => card.key === 'MATCHMAKER').length, 1);
   assert.equal(game.history.filter((entry) => entry.type === 'MARRIAGE_CREATED').length, 1);
   assert.equal(GameEngine.buildPlayerView(game, partner).publicState.players[witch].matchmakerCardCount, 1);
 
@@ -403,17 +407,18 @@ test('asignar el Gato Negro al inicio no revela una carta de Juicio', () => {
   assert.equal(GameEngine.buildPlayerView(game, target).privateState.legalActions.some((item) => item.type === ACTION.SELECT_TRYAL), false);
 });
 
-test('el Gato Negro obliga a revelar una carta despues de Conspiracion', () => {
+test('el Gato Negro obliga a revelar una carta antes de Conspiracion', () => {
   let game = beginDay(started());
   const holder = game.turnOrder.find((id) => game.players[id].hasBlackCat);
-  game.subPhase = SUB_PHASE.CONSPIRACY_RESOLUTION;
-  game.pendingActions = { conspiracySelections: {} };
-  for (const id of game.turnOrder) game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
+  game.deck.unshift({ id: 'conspiracy_black_cat', key: 'CONSPIRACY', name: 'Conspiracion', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'TRYAL_CARD' });
+  game = act(game, game.currentPlayerId, ACTION.DRAW_CARDS);
   assert.equal(game.subPhase, SUB_PHASE.TRYAL_SELECTION);
   assert.equal(game.pendingActions.accusedId, holder);
-  assert.equal(game.pendingActions.resumeAfter, 'CONSPIRACY');
+  assert.equal(game.pendingActions.resumeAfter, 'CONSPIRACY_START');
   assert.equal(GameEngine.buildPlayerView(game, holder).publicState.pendingAction.reason, 'BLACK_CAT');
   assert.equal(GameEngine.buildPlayerView(game, holder).privateState.legalActions.some((item) => item.type === ACTION.SELECT_TRYAL), true);
+  game = revealBlackCatBeforeConspiracy(game, 'now_exchange');
+  assert.equal(game.subPhase, SUB_PHASE.CONSPIRACY_RESOLUTION);
 });
 
 test('el segundo robo se reanuda despues de resolver Conspiracy', () => {
@@ -426,12 +431,12 @@ test('el segundo robo se reanuda despues de resolver Conspiracy', () => {
   ];
   const nextPlayer = game.turnOrder[(game.turn.index + 1) % game.turnOrder.length];
   game = act(game, actor, ACTION.DRAW_CARDS);
+  game = revealBlackCatBeforeConspiracy(game, 'before_resume');
   assert.equal(game.subPhase, SUB_PHASE.CONSPIRACY_RESOLUTION);
   assert.deepEqual(game.interruptedTurn, { playerId: actor, remainingDraws: 1 });
   for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) {
     game = act(game, id, ACTION.SELECT_CONSPIRACY_CARD, { tryalCardIndex: 0 }, id);
   }
-  game = revealBlackCatAfterConspiracy(game, 'resume_draw');
   assert.ok(game.players[actor].hand.some((card) => card.id === 'alibi_resume'));
   assert.equal(game.currentPlayerId, nextPlayer);
   assert.equal(game.interruptedTurn, null);
@@ -444,7 +449,7 @@ test('si quien agoto el mazo muere durante la Noche, su robo pendiente se cancel
   const nextPlayer = game.turnOrder[(actorIndex + 1) % game.turnOrder.length];
   game.currentPlayerId = actor;
   game.turn.index = actorIndex;
-  game.deck = [{ id: 'last_before_night', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' }];
+  game.deck = [{ id: 'night_before_death', key: 'NIGHT', name: 'Noche', color: 'BLACK', trigger: 'ON_DRAW', targetRules: 'NONE' }];
   game.discard.unshift({ id: 'never_drawn', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' });
   game = act(game, actor, ACTION.DRAW_CARDS);
   const witches = game.turnOrder.filter((id) => game.players[id].alive && game.players[id].hasEverBeenWitch);
@@ -530,7 +535,7 @@ test('7 puntos inician juicio; revelar WITCH mata y da victoria al Pueblo', () =
   assert.equal(publicAccused.wasEverWitch, true);
 });
 
-test('revelar las cinco cartas de Juicio mata aunque ninguna sea Bruja', () => {
+test('revelar todas las cartas de Juicio mata aunque ninguna sea Bruja', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   const target = game.turnOrder.find((id) => id !== actor && !game.players[id].tryalCards.some((card) => card.type === TRYAL.WITCH));
@@ -610,4 +615,144 @@ test('confesion valida protege durante esa noche y revela publicamente la carta'
   for (const id of game.turnOrder.filter((id) => id !== victim && game.players[id].alive)) game = act(game, id, ACTION.PASS_CONFESSION, {}, id);
   assert.equal(game.players[victim].alive, true);
   assert.equal(game.players[victim].confessedTonight, false);
+});
+
+test('la preparacion excluye las tres cartas especiales, deja Noche al fondo y conserva las 59 cartas', () => {
+  for (const [playerCount, tryalCount] of [[4, 5], [7, 5], [8, 4], [9, 4], [10, 3], [12, 3]]) {
+    let game = GameEngine.createGame({ id: `SETUP_${playerCount}`, inviteCode: `S${playerCount}TEST`, host: { id: 'p1', firebaseUid: 'u1', name: 'Host' }, now: 1 });
+    for (let n = 2; n <= playerCount; n += 1) game = GameEngine.addPlayer(game, { id: `p${n}`, firebaseUid: `u${n}`, name: `Player ${n}` }, n);
+    game = act(game, 'p1', ACTION.START_GAME, {}, `setup_${playerCount}`);
+    assert.ok(game.turnOrder.every((id) => game.players[id].hand.length === 3));
+    assert.ok(game.turnOrder.every((id) => game.players[id].tryalCards.length === tryalCount));
+    assert.ok(game.turnOrder.every((id) => game.players[id].hand.every((card) => !['BLACK_CAT', 'CONSPIRACY', 'NIGHT'].includes(card.key))));
+    assert.equal(game.deck.filter((card) => card.key === 'CONSPIRACY').length, 1);
+    assert.equal(game.deck.filter((card) => card.key === 'BLACK_CAT').length, 0);
+    assert.equal(game.deck.at(-1).key, 'NIGHT');
+    assert.equal(game.setupBlackCat.key, 'BLACK_CAT');
+    const witch = game.turnOrder.find((id) => game.players[id].isCurrentWitch);
+    game = act(game, witch, ACTION.SELECT_BLACK_CAT, { targetId: witch }, `cat_${playerCount}`);
+    const totalCards = game.deck.length
+      + game.turnOrder.reduce((sum, id) => sum + game.players[id].hand.length + game.players[id].blueCards.length, 0)
+      + game.discard.length;
+    assert.equal(totalCards, 59);
+    assert.equal(game.players[witch].blueCards.some((card) => card.key === 'BLACK_CAT'), true);
+  }
+});
+
+test('Piedad impide jugar cartas rojas directamente contra su portador', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  game.players[target].blueCards.push(standardCard('MERCY', 'mercy_guard'));
+  game.players[actor].hand.unshift(standardCard('ACCUSATION', 'blocked_red'));
+  const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'blocked_red');
+  assert.ok(!action.targets.includes(target));
+  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'blocked_red', targetId: target }), (error) => error.code === 'INVALID_TARGET');
+});
+
+test('Incendio descarta solo la mano del objetivo y no sus cartas frente a el', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  const handIds = game.players[target].hand.map((card) => card.id);
+  game.players[target].blueCards.push(standardCard('ASYLUM', 'asylum_survives_fire'));
+  game.players[actor].hand.unshift(standardCard('ARSON', 'arson_test'));
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'arson_test', targetId: target });
+  assert.deepEqual(game.players[target].hand, []);
+  assert.ok(handIds.every((id) => game.discard.some((card) => card.id === id)));
+  assert.ok(game.players[target].blueCards.some((card) => card.id === 'asylum_survives_fire'));
+});
+
+test('Maldicion descarta la azul elegida y puede eliminar el Gato Negro', () => {
+  let game = beginDay(started());
+  const holder = game.turnOrder.find((id) => game.players[id].hasBlackCat);
+  const actor = game.turnOrder.find((id) => id !== holder);
+  game.currentPlayerId = actor;
+  game.turn.index = game.turnOrder.indexOf(actor);
+  const blackCat = game.players[holder].blueCards.find((card) => card.key === 'BLACK_CAT');
+  game.players[actor].hand.unshift(standardCard('CURSE', 'curse_cat'));
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'curse_cat', targetId: holder, targetCardId: blackCat.id });
+  assert.equal(game.players[holder].hasBlackCat, false);
+  assert.ok(game.discard.some((card) => card.id === blackCat.id));
+  assert.ok(game.discard.some((card) => card.id === 'curse_cat'));
+});
+
+test('Robo mueve la mano completa entre dos terceros y nunca hacia quien lo juega', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const [source, recipient] = game.turnOrder.filter((id) => id !== actor).slice(0, 2);
+  const sourceIds = game.players[source].hand.map((card) => card.id);
+  const recipientBefore = game.players[recipient].hand.length;
+  game.players[actor].hand.unshift(standardCard('ROBBERY', 'robbery_test'));
+  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'robbery_test', targetIds: [source, actor] }), (error) => error.code === 'INVALID_TARGET');
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'robbery_test', targetIds: [source, recipient] });
+  assert.equal(game.players[source].hand.length, 0);
+  assert.equal(game.players[recipient].hand.length, recipientBefore + sourceIds.length);
+  assert.ok(sourceIds.every((id) => game.players[recipient].hand.some((card) => card.id === id)));
+});
+
+test('Chivo Expiatorio mueve completo el conjunto frente a un jugador', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const [source, recipient] = game.turnOrder.filter((id) => id !== actor).slice(0, 2);
+  game.players[source].accusations = [{ ...standardCard('EVIDENCE', 'evidence_front'), sourceId: actor }];
+  game.players[source].accusationTotal = 3;
+  game.players[source].blueCards.push(standardCard('ASYLUM', 'asylum_front'));
+  game.players[source].trapCards.push(standardCard('STOCKS', 'stocks_front'));
+  game.players[actor].hand.unshift(standardCard('SCAPEGOAT', 'scapegoat_test'));
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'scapegoat_test', targetIds: [source, recipient] });
+  assert.equal(game.players[source].accusationTotal, 0);
+  assert.equal(game.players[source].blueCards.length, 0);
+  assert.equal(game.players[source].trapCards.length, 0);
+  assert.equal(game.players[recipient].accusationTotal, 3);
+  assert.ok(game.players[recipient].blueCards.some((card) => card.id === 'asylum_front'));
+  assert.ok(game.players[recipient].trapCards.some((card) => card.id === 'stocks_front'));
+});
+
+test('dos Cepos acumulados hacen perder dos turnos consecutivos y se descartan uno a uno', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const targetIndex = (game.turn.index + 1) % game.turnOrder.length;
+  const target = game.turnOrder[targetIndex];
+  game.players[actor].hand.unshift(standardCard('STOCKS', 'stocks_one'), standardCard('STOCKS', 'stocks_two'));
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'stocks_one', targetId: target }, 'one');
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'stocks_two', targetId: target }, 'two');
+  game = act(game, actor, ACTION.END_TURN);
+  assert.notEqual(game.currentPlayerId, target);
+  assert.equal(game.players[target].trapCards.length, 1);
+  while (game.history.filter((entry) => entry.type === 'TURN_SKIPPED').length < 2) game = act(game, game.currentPlayerId, ACTION.END_TURN, {}, `skip_${game.turn.number}`);
+  assert.equal(game.players[target].trapCards.length, 0);
+  assert.equal(game.discard.filter((card) => ['stocks_one', 'stocks_two'].includes(card.id)).length, 2);
+});
+
+test('dos Casamenteros frente al mismo jugador se descartan y no crean vinculo', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  game.players[actor].hand.unshift(standardCard('MATCHMAKER', 'match_same_one'), standardCard('MATCHMAKER', 'match_same_two'));
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'match_same_one', targetId: target }, 'first');
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'match_same_two', targetId: target }, 'second');
+  assert.equal(game.players[target].blueCards.filter((card) => card.key === 'MATCHMAKER').length, 0);
+  assert.equal(game.players[target].marriedTo, null);
+  assert.equal(game.discard.filter((card) => ['match_same_one', 'match_same_two'].includes(card.id)).length, 2);
+});
+
+test('al terminar la Noche se reconstruye el descarte y Noche queda al fondo', () => {
+  let game = beginDay(started());
+  const reusable = standardCard('BLACK_CAT', 'black_cat_recycled');
+  game.deck = [];
+  game.discard = [standardCard('ALIBI', 'alibi_recycled'), reusable, standardCard('NIGHT', 'night_recycled_bottom')];
+  game.status = GAME_STATUS.NIGHT; game.phase = GAME_STATUS.NIGHT; game.subPhase = SUB_PHASE.CONFESSION;
+  game.pendingActions = { witchVotes: {}, protection: null, confessions: {}, confessionResponses: {} };
+  for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) game = act(game, id, ACTION.PASS_CONFESSION, {}, `rebuild_${id}`);
+  assert.equal(game.discard.length, 0);
+  assert.equal(game.deck.at(-1).id, 'night_recycled_bottom');
+  assert.ok(game.deck.some((card) => card.id === 'black_cat_recycled'));
+
+  const actor = game.currentPlayerId;
+  const target = game.turnOrder.find((id) => id !== actor);
+  game.deck = game.deck.filter((card) => card.id !== reusable.id);
+  game.players[actor].hand.push(reusable);
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: reusable.id, targetId: target });
+  assert.equal(game.players[target].hasBlackCat, true);
 });

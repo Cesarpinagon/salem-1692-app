@@ -2,7 +2,7 @@ import {
   ACCUSATION_THRESHOLD, ACTION, CARD_COLOR, DECISION_TIMEOUT_MS, EVENT, GAME_STATUS,
   MAX_PLAYERS, MIN_PLAYERS, SUB_PHASE, TRYAL,
 } from './constants.js';
-import { buildTownDeck } from './cards.js';
+import { buildTownDeck, getCardDefinition } from './cards.js';
 
 const clone = (value) => structuredClone(value);
 const nowIso = (now) => new Date(now).toISOString();
@@ -10,11 +10,9 @@ const nowIso = (now) => new Date(now).toISOString();
 export function hydrateGameState(gameInput) {
   const game = clone(gameInput);
   const normalizeCard = (card) => {
-    if (!card || !['ALIBI', 'ASYLUM'].includes(card.key)) return card;
-    card.targetRules = 'OTHER_PLAYER';
-    if (card.key === 'ALIBI') card.description = 'Retira hasta 3 cartas de acusacion de otro jugador.';
-    if (card.key === 'ASYLUM') card.description = 'Protege permanentemente a otro jugador del ataque de las Brujas durante la Noche.';
-    return card;
+    if (!card?.key) return card;
+    const definition = getCardDefinition(card.key);
+    return definition ? Object.assign(card, definition, { id: card.id }) : card;
   };
   const arrayFields = ['deck', 'discard', 'retiredCards', 'effects', 'history', 'events', 'internalLog', 'randomAudit', 'turnOrder'];
   arrayFields.forEach((field) => { game[field] = Array.isArray(game[field]) ? game[field] : []; });
@@ -30,10 +28,10 @@ export function hydrateGameState(gameInput) {
   game.turn ||= { number: 0, index: 0, mode: null };
   game.nextEventId ??= 1;
   game.interruptedTurn ||= null;
-  game.pendingNightAfterDraw ??= false;
+  game.setupBlackCat ||= null;
   const conspiracyInLegacyHands = [];
   Object.values(game.players).forEach((player) => {
-    ['hand', 'tryalCards', 'blueCards', 'matchmakerCards', 'accusations', 'secretInformation'].forEach((field) => {
+    ['hand', 'tryalCards', 'blueCards', 'matchmakerCards', 'trapCards', 'accusations', 'secretInformation'].forEach((field) => {
       player[field] = Array.isArray(player[field]) ? player[field] : [];
     });
     player.alive ??= true;
@@ -43,7 +41,9 @@ export function hydrateGameState(gameInput) {
     player.hasEverBeenWitch ??= false;
     player.isCurrentWitch ??= false;
     player.isCurrentConstable ??= false;
-    player.hasBlackCat ??= false;
+    player.blueCards.push(...player.matchmakerCards.filter((card) => !player.blueCards.some((item) => item.id === card.id)));
+    player.matchmakerCards = [];
+    player.hasBlackCat = player.blueCards.some((card) => card.key === 'BLACK_CAT');
     player.protectedTonight ??= false;
     player.confessedTonight ??= false;
     player.marriedTo ??= null;
@@ -51,7 +51,7 @@ export function hydrateGameState(gameInput) {
     player.wasWitchAnnounced ??= false;
     conspiracyInLegacyHands.push(...player.hand.filter((card) => card.key === 'CONSPIRACY'));
     player.hand = player.hand.filter((card) => card.key !== 'CONSPIRACY');
-    [...player.hand, ...player.blueCards].forEach(normalizeCard);
+    [...player.hand, ...player.blueCards, ...player.trapCards, ...player.accusations].forEach(normalizeCard);
   });
   let asylumKept = false;
   const keepSingleAsylum = (cards) => cards.filter((card) => {
@@ -122,7 +122,7 @@ function setDecisionTimer(game, at, timeoutMs = DECISION_TIMEOUT_MS) {
 function playerTemplate({ id, firebaseUid, name, isHost = false }) {
   return {
     id, firebaseUid, name, alive: true, connected: true, isHost, character: null, hand: [], tryalCards: [],
-    blueCards: [], accusations: [], accusationTotal: 0, hasEverBeenWitch: false, isCurrentWitch: false,
+    blueCards: [], trapCards: [], accusations: [], accusationTotal: 0, hasEverBeenWitch: false, isCurrentWitch: false,
     isCurrentConstable: false, hasBlackCat: false, protectedTonight: false, confessedTonight: false,
     canCommunicate: true, secretInformation: [], deathReason: null, matchmakerCards: [], marriedTo: null, lastConspiracyCard: null,
   };
@@ -137,7 +137,7 @@ export function createGame({ id, inviteCode, host, now = Date.now() }) {
       [host.id]: playerTemplate({ ...host, isHost: true }),
     }, turnOrder: [host.id], effects: [], pendingActions: {}, timers: { phaseEndsAt: null }, history: [],
     events: [], internalLog: [], processedActionIds: {}, winner: null, nextEventId: 1, randomAudit: [],
-    pendingNightAfterDraw: false,
+    setupBlackCat: null,
   };
 }
 
@@ -154,7 +154,7 @@ export function addPlayer(gameInput, player, now = Date.now()) {
 }
 
 function assignTryals(game, rng) {
-  const count = game.turnOrder.length <= 4 ? 5 : 4;
+  const count = game.turnOrder.length <= 7 ? 5 : game.turnOrder.length <= 9 ? 4 : 3;
   const total = game.turnOrder.length * count;
   const cards = [
     { id: 'tryal_witch', type: TRYAL.WITCH, revealed: false },
@@ -196,12 +196,15 @@ function startGame(game, playerId, rng, at) {
       limitations: [],
     };
   });
-  const completeDeck = buildTownDeck(game.turnOrder.length);
+  const completeDeck = buildTownDeck();
+  const blackCat = completeDeck.find((card) => card.key === 'BLACK_CAT');
   const conspiracy = completeDeck.find((card) => card.key === 'CONSPIRACY');
-  game.deck = shuffled(completeDeck.filter((card) => card.key !== 'CONSPIRACY'), rng, game.randomAudit);
-  game.turnOrder.forEach((id) => { game.players[id].hand = game.deck.splice(0, 5); });
-  assertRule(game.turnOrder.every((id) => game.players[id].hand.length === 5), 'DECK_TOO_SMALL', 'El mazo no alcanzo para repartir las manos iniciales.');
-  game.deck = shuffled([...game.deck, conspiracy], rng, game.randomAudit);
+  const night = completeDeck.find((card) => card.key === 'NIGHT');
+  game.deck = shuffled(completeDeck.filter((card) => !['BLACK_CAT', 'CONSPIRACY', 'NIGHT'].includes(card.key)), rng, game.randomAudit);
+  game.turnOrder.forEach((id) => { game.players[id].hand = game.deck.splice(0, 3); });
+  assertRule(game.turnOrder.every((id) => game.players[id].hand.length === 3), 'DECK_TOO_SMALL', 'El mazo no alcanzo para repartir las manos iniciales.');
+  game.deck = [...shuffled([...game.deck, conspiracy], rng, game.randomAudit), night];
+  game.setupBlackCat = blackCat;
   game.status = GAME_STATUS.DAWN;
   game.phase = GAME_STATUS.DAWN;
   game.subPhase = 'BLACK_CAT_SELECTION';
@@ -247,7 +250,7 @@ function resetGame(game, playerId, at) {
     nextEventId: 1,
     randomAudit: [],
     interruptedTurn: null,
-    pendingNightAfterDraw: false,
+    setupBlackCat: null,
     updatedAt: nowIso(at),
   });
 }
@@ -267,17 +270,62 @@ function beginDay(game, at) {
 function selectBlackCat(game, playerId, targetId, at) {
   assertRule(game.phase === GAME_STATUS.DAWN && game.subPhase === 'BLACK_CAT_SELECTION', 'WRONG_PHASE', 'No es momento de elegir el Gato Negro.');
   assertRule(game.players[playerId].alive && game.players[playerId].isCurrentWitch, 'NOT_ALLOWED', 'Solo la Bruja actual puede elegir el Gato Negro.');
-  assertRule(game.players[targetId]?.alive && targetId !== playerId, 'INVALID_TARGET', 'Debes asignar el Gato Negro a otro jugador vivo.');
-  game.turnOrder.forEach((id) => { game.players[id].hasBlackCat = id === targetId; });
+  assertRule(game.players[targetId]?.alive, 'INVALID_TARGET', 'Debes asignar el Gato Negro a un jugador vivo.');
+  assertRule(game.setupBlackCat?.key === 'BLACK_CAT', 'BLACK_CAT_MISSING', 'No se encontro la carta de Gato Negro de la preparacion.');
+  game.players[targetId].blueCards.push(game.setupBlackCat);
+  game.setupBlackCat = null;
+  syncSpecialCards(game);
   game.pendingActions = {};
-  publicEvent(game, 'BLACK_CAT_ASSIGNED', `${game.players[targetId].name} recibio el Gato Negro. Su efecto se activara cuando aparezca Conspiracion.`, { targetId }, at);
+  publicEvent(game, 'BLACK_CAT_ASSIGNED', `${game.players[targetId].name} recibio el Gato Negro boca arriba.`, { targetId }, at);
   beginDay(game, at);
+}
+
+function frontCardCount(player) {
+  return player.accusations.length + player.blueCards.length + player.trapCards.length;
+}
+
+function syncSpecialCards(game) {
+  game.turnOrder.forEach((id) => {
+    game.players[id].hasBlackCat = game.players[id].blueCards.some((card) => card.key === 'BLACK_CAT');
+  });
+}
+
+function recalculateMarriages(game, at, announce = false) {
+  const previousPairs = new Set(game.turnOrder.flatMap((id) => {
+    const partner = game.players[id].marriedTo;
+    return partner ? [[id, partner].sort().join(':')] : [];
+  }));
+  game.turnOrder.forEach((id) => { game.players[id].marriedTo = null; });
+  game.effects = game.effects.filter((effect) => effect.type !== 'MARRIAGE');
+  const placements = game.turnOrder.flatMap((id) => game.players[id].blueCards
+    .filter((card) => card.key === 'MATCHMAKER').map((card) => ({ playerId: id, card })));
+  if (placements.length !== 2) return;
+  if (placements[0].playerId === placements[1].playerId) {
+    const owner = game.players[placements[0].playerId];
+    const ids = new Set(placements.map(({ card }) => card.id));
+    owner.blueCards = owner.blueCards.filter((card) => !ids.has(card.id));
+    game.discard.push(...placements.map(({ card }) => card));
+    if (announce) publicEvent(game, 'MATCHMAKERS_DISCARDED', `Las dos cartas de Casamentero terminaron frente a ${owner.name} y fueron descartadas.`, { playerId: owner.id }, at);
+    return;
+  }
+  const [firstId, secondId] = placements.map(({ playerId }) => playerId);
+  game.players[firstId].marriedTo = secondId;
+  game.players[secondId].marriedTo = firstId;
+  game.effects.push({ type: 'MARRIAGE', targetIds: [firstId, secondId], cardIds: placements.map(({ card }) => card.id), visibility: 'PUBLIC', duration: 'PERMANENT' });
+  const pairKey = [firstId, secondId].sort().join(':');
+  if (announce && !previousPairs.has(pairKey)) {
+    publicEvent(game, EVENT.MARRIAGE_CREATED, `${game.players[firstId].name} y ${game.players[secondId].name} quedaron unidos por Casamentero.`, { playerIds: [firstId, secondId] }, at);
+  }
 }
 
 function validTargets(game, playerId, card) {
   const alive = game.turnOrder.filter((id) => game.players[id].alive
-    && (card.color !== CARD_COLOR.RED || game.players[id].tryalCards.some((tryal) => !tryal.revealed)));
-  if (card.key === 'MATCHMAKER') return alive.filter((id) => !game.players[id].marriedTo && game.players[id].matchmakerCards.length === 0);
+    && (card.color !== CARD_COLOR.RED || (game.players[id].tryalCards.some((tryal) => !tryal.revealed)
+      && !game.players[id].blueCards.some((blueCard) => blueCard.key === 'MERCY'))));
+  if (card.key === 'ALIBI') return alive.filter((id) => id !== playerId
+    && game.players[id].accusations.some((accusation) => (accusation.points || 0) <= 3));
+  if (card.key === 'CURSE') return alive.filter((id) => id !== playerId && game.players[id].blueCards.length > 0);
+  if (['ROBBERY', 'SCAPEGOAT'].includes(card.key)) return alive.filter((id) => id !== playerId);
   if (card.targetRules === 'SELF') return [playerId];
   if (card.targetRules === 'OTHER_PLAYER') return alive.filter((id) => id !== playerId);
   if (card.targetRules === 'ANY_ALIVE_PLAYER') return alive;
@@ -291,34 +339,38 @@ function startNight(game, at, drawResume = null) {
   game.subPhase = SUB_PHASE.WITCH_SELECTION;
   game.pendingActions = { witchVotes: {}, protection: null, confessions: {} };
   game.interruptedTurn = drawResume;
-  game.pendingNightAfterDraw = false;
   setDecisionTimer(game, at);
   publicEvent(game, EVENT.NIGHT_STARTED, 'Comenzo la noche.', {}, at);
 }
 
+function beginConspiracy(game, at) {
+  game.subPhase = SUB_PHASE.CONSPIRACY_RESOLUTION;
+  game.pendingActions = { conspiracySelections: {} };
+  setDecisionTimer(game, at);
+  publicEvent(game, 'CONSPIRACY_STARTED', 'Comenzo una Conspiracion: todos eligen simultaneamente una carta de Juicio del jugador de su izquierda.', {}, at);
+}
+
 function resolveDrawnCard(game, playerId, card, remainingDraws, at) {
   publicEvent(game, EVENT.CARD_DRAWN, `${game.players[playerId].name} robo una carta.`, { color: card.color }, at);
-  const exhaustedMainDeck = game.deck.length === 0;
   const drawResume = remainingDraws > 0 ? { playerId, remainingDraws } : null;
   if (card.color !== CARD_COLOR.BLACK) {
     game.players[playerId].hand.push(card);
-    if (exhaustedMainDeck) {
-      startNight(game, at, drawResume);
-      return true;
-    }
     return false;
   }
   game.discard.push(card);
   if (card.key === 'CONSPIRACY') {
-    game.subPhase = SUB_PHASE.CONSPIRACY_RESOLUTION;
-    game.pendingActions = { conspiracySelections: {} };
     game.interruptedTurn = drawResume;
-    game.pendingNightAfterDraw = exhaustedMainDeck;
-    setDecisionTimer(game, at);
-    publicEvent(game, 'CONSPIRACY_STARTED', 'Comenzo una conspiracion.', {}, at);
+    const blackCatId = game.turnOrder.find((id) => game.players[id].alive && game.players[id].hasBlackCat
+      && game.players[id].tryalCards.some((tryal) => !tryal.revealed));
+    if (blackCatId) {
+      game.subPhase = SUB_PHASE.TRYAL_SELECTION;
+      game.pendingActions = { accusedId: blackCatId, accuserId: blackCatId, resumeAfter: 'CONSPIRACY_START' };
+      setDecisionTimer(game, at);
+      publicEvent(game, 'BLACK_CAT_REVEAL', `${game.players[blackCatId].name} debe revelar una carta de Juicio antes de resolver Conspiracion.`, { targetId: blackCatId }, at);
+    } else beginConspiracy(game, at);
     return true;
   }
-  if (exhaustedMainDeck) {
+  if (card.key === 'NIGHT') {
     startNight(game, at, drawResume);
     return true;
   }
@@ -326,10 +378,11 @@ function resolveDrawnCard(game, playerId, card, remainingDraws, at) {
 }
 
 function recycleDiscard(game, rng) {
-  const reusableCards = game.discard.filter((card) => card.key !== 'MATCHMAKER');
-  const spentMatchmakerCards = game.discard.filter((card) => card.key === 'MATCHMAKER');
-  game.retiredCards.push(...spentMatchmakerCards);
-  game.deck = shuffled(reusableCards, rng, game.randomAudit);
+  const night = game.discard.find((card) => card.key === 'NIGHT')
+    || game.deck.find((card) => card.key === 'NIGHT')
+    || { ...getCardDefinition('NIGHT'), id: 'NIGHT_UNIQUE' };
+  const reusableCards = [...game.deck, ...game.discard].filter((card) => card.key !== 'NIGHT');
+  game.deck = [...shuffled(reusableCards, rng, game.randomAudit), night];
   game.discard = [];
 }
 
@@ -383,10 +436,14 @@ function playCard(game, playerId, payload, at) {
   const card = game.players[playerId].hand[index];
   assertRule(card.trigger === 'ON_PLAY', 'CARD_NOT_PLAYABLE', 'Esta carta no se juega desde la mano.');
   const targets = validTargets(game, playerId, card);
-  const targetIds = card.targetRules === 'TWO_ALIVE_PLAYERS' ? [...new Set(payload.targetIds || [])] : [];
+  const orderedTargetIds = Array.isArray(payload.targetIds) ? payload.targetIds : [];
+  const targetIds = [...new Set(orderedTargetIds)];
   const targetId = payload.targetId ?? (card.targetRules === 'SELF' ? playerId : null);
   if (card.targetRules === 'TWO_ALIVE_PLAYERS') {
     assertRule(targetIds.length === 2 && targetIds.every((id) => targets.includes(id)), 'INVALID_TARGET', 'Debes elegir dos jugadores vivos y sin vinculo previo.');
+  } else if (card.targetRules === 'TWO_OTHER_PLAYERS_ORDERED') {
+    assertRule(orderedTargetIds.length === 2 && targetIds.length === 2 && targetIds.every((id) => targets.includes(id)), 'INVALID_TARGET', 'Debes elegir un jugador de origen y otro de destino, ambos distintos de ti.');
+    if (card.key === 'SCAPEGOAT') assertRule(frontCardCount(game.players[orderedTargetIds[0]]) > 0, 'INVALID_TARGET', 'El jugador de origen no tiene cartas frente a el.');
   } else assertRule(card.targetRules === 'NONE' || targets.includes(targetId), 'INVALID_TARGET', 'El objetivo no es legal.');
   game.turn.mode = 'PLAY';
   game.subPhase = SUB_PHASE.PLAY_CARDS;
@@ -394,7 +451,7 @@ function playCard(game, playerId, payload, at) {
   publicEvent(game, EVENT.CARD_PLAYED, `${game.players[playerId].name} jugo ${card.name}.`, { playerId, targetId, targetIds, card: card.key }, at);
   if (card.color === CARD_COLOR.RED) {
     const target = game.players[targetId];
-    target.accusations.push({ cardId: card.id, sourceId: playerId, points: card.points });
+    target.accusations.push({ ...card, sourceId: playerId });
     target.accusationTotal += card.points;
     publicEvent(game, EVENT.ACCUSATION_ADDED, `${target.name} tiene ${target.accusationTotal} puntos de acusacion.`, { targetId, total: target.accusationTotal }, at);
     if (target.accusationTotal >= ACCUSATION_THRESHOLD) {
@@ -404,34 +461,71 @@ function playCard(game, playerId, payload, at) {
     }
   } else if (card.key === 'ALIBI') {
     const target = game.players[targetId];
-    const removed = target.accusations.splice(0, 3);
+    const requestedIds = [...new Set(payload.accusationCardIds || [])];
+    const removed = requestedIds.map((cardId) => target.accusations.find((accusation) => accusation.id === cardId || accusation.cardId === cardId)).filter(Boolean);
+    const removedPoints = removed.reduce((total, accusation) => total + (accusation.points || 0), 0);
+    assertRule(removed.length === requestedIds.length && removed.length > 0 && removedPoints <= 3, 'INVALID_ACCUSATIONS', 'Coartada debe retirar una o mas cartas que sumen como maximo 3 puntos.');
+    const removedIds = new Set(removed.map((accusation) => accusation.id || accusation.cardId));
+    target.accusations = target.accusations.filter((accusation) => !removedIds.has(accusation.id || accusation.cardId));
     target.accusationTotal = target.accusations.reduce((total, accusation) => total + (accusation.points || 0), 0);
+    game.discard.push(...removed, card);
+    publicEvent(game, 'ALIBI_APPLIED', `${game.players[playerId].name} retiro ${removedPoints} punto${removedPoints === 1 ? '' : 's'} de acusacion de ${target.name}.`, { playerId, targetId, removedCount: removed.length, removedPoints }, at);
+  } else if (card.key === 'ARSON') {
+    const target = game.players[targetId];
+    game.discard.push(...target.hand, card);
+    const discardedCount = target.hand.length;
+    target.hand = [];
+    publicEvent(game, 'ARSON_APPLIED', `${target.name} perdio las ${discardedCount} cartas de su mano por Incendio.`, { playerId, targetId, discardedCount }, at);
+  } else if (card.key === 'CURSE') {
+    const target = game.players[targetId];
+    const blueIndex = target.blueCards.findIndex((blueCard) => blueCard.id === payload.targetCardId);
+    assertRule(blueIndex >= 0, 'INVALID_BLUE_CARD', 'Debes elegir una carta azul situada frente al objetivo.');
+    const [removed] = target.blueCards.splice(blueIndex, 1);
+    game.discard.push(removed, card);
+    syncSpecialCards(game);
+    recalculateMarriages(game, at);
+    publicEvent(game, 'CURSE_APPLIED', `${removed.name} fue descartada de frente a ${target.name}.`, { playerId, targetId, targetCardId: removed.id }, at);
+  } else if (card.key === 'ROBBERY') {
+    const [sourceId, recipientId] = orderedTargetIds;
+    const stolen = game.players[sourceId].hand;
+    game.players[sourceId].hand = [];
+    game.players[recipientId].hand.push(...stolen);
     game.discard.push(card);
-    publicEvent(game, 'ALIBI_APPLIED', `${game.players[playerId].name} retiro ${removed.length} carta${removed.length === 1 ? '' : 's'} de acusacion de ${target.name}.`, { playerId, targetId, removedCount: removed.length }, at);
-  } else if (card.key === 'MATCHMAKER') {
-    game.players[targetId].matchmakerCards.push(card);
-    publicEvent(game, EVENT.MARRIAGE_CARD_ASSIGNED, `${game.players[playerId].name} asigno una carta de Casamiento a ${game.players[targetId].name}.`, { playerId, targetId, cardId: card.id }, at);
-    const assignedIds = game.turnOrder.filter((id) => game.players[id].alive
-      && !game.players[id].marriedTo && game.players[id].matchmakerCards.length > 0);
-    if (assignedIds.length === 2) {
-      const [firstId, secondId] = assignedIds;
-      game.players[firstId].marriedTo = secondId;
-      game.players[secondId].marriedTo = firstId;
-      game.effects.push({
-        type: 'MARRIAGE',
-        targetIds: assignedIds,
-        cardIds: assignedIds.flatMap((id) => game.players[id].matchmakerCards.map((item) => item.id)),
-        visibility: 'PUBLIC',
-        duration: 'PERMANENT',
-      });
-      publicEvent(game, EVENT.MARRIAGE_CREATED, `${game.players[firstId].name} y ${game.players[secondId].name} quedaron unidos por Casamiento.`, { playerIds: assignedIds }, at);
+    publicEvent(game, 'ROBBERY_APPLIED', `${game.players[sourceId].name} entrego toda su mano a ${game.players[recipientId].name}.`, { playerId, sourceId, recipientId, cardCount: stolen.length }, at);
+  } else if (card.key === 'SCAPEGOAT') {
+    const [sourceId, recipientId] = orderedTargetIds;
+    const source = game.players[sourceId];
+    const recipient = game.players[recipientId];
+    recipient.accusations.push(...source.accusations);
+    recipient.blueCards.push(...source.blueCards);
+    recipient.trapCards.push(...source.trapCards);
+    source.accusations = [];
+    source.blueCards = [];
+    source.trapCards = [];
+    source.accusationTotal = 0;
+    recipient.accusationTotal = recipient.accusations.reduce((total, accusation) => total + (accusation.points || 0), 0);
+    game.discard.push(card);
+    syncSpecialCards(game);
+    recalculateMarriages(game, at, true);
+    publicEvent(game, 'SCAPEGOAT_APPLIED', `Todas las cartas frente a ${source.name} fueron movidas frente a ${recipient.name}.`, { playerId, sourceId, recipientId }, at);
+    if (recipient.accusationTotal >= ACCUSATION_THRESHOLD && recipient.tryalCards.some((tryal) => !tryal.revealed)) {
+      game.subPhase = SUB_PHASE.TRYAL_SELECTION;
+      game.pendingActions = { accusedId: recipientId, accuserId: playerId };
+      setDecisionTimer(game, at);
     }
+  } else if (card.key === 'STOCKS') {
+    game.players[targetId].trapCards.push(card);
+    publicEvent(game, 'STOCKS_APPLIED', `${game.players[targetId].name} perdera su siguiente turno por un Cepo.`, { playerId, targetId }, at);
+  } else if (card.key === 'MATCHMAKER') {
+    game.players[targetId].blueCards.push(card);
+    publicEvent(game, EVENT.MARRIAGE_CARD_ASSIGNED, `${game.players[playerId].name} asigno una carta de Casamentero a ${game.players[targetId].name}.`, { playerId, targetId, cardId: card.id }, at);
+    recalculateMarriages(game, at, true);
   } else if (card.color === CARD_COLOR.BLUE) {
     game.players[targetId].blueCards.push(card);
+    syncSpecialCards(game);
   } else {
     game.discard.push(card);
   }
-  if (card.color === CARD_COLOR.RED) game.discard.push(card);
 }
 
 function revealTryal(game, playerId, payload, rng, at) {
@@ -442,6 +536,7 @@ function revealTryal(game, playerId, payload, rng, at) {
   const card = game.players[accusedId].tryalCards.find((item) => item.id === payload.tryalCardId && !item.revealed);
   assertRule(card, 'INVALID_TRYAL', 'La carta de juicio no es valida.');
   card.revealed = true;
+  game.discard.push(...game.players[accusedId].accusations);
   game.players[accusedId].accusations = [];
   game.players[accusedId].accusationTotal = 0;
   publicEvent(game, EVENT.TRYAL_REVEALED, `${game.players[accusedId].name} revelo una carta de Juicio: ${tryalName(card.type)}. Sus acusaciones volvieron a 0.`, { accusedId, type: card.type }, at);
@@ -451,6 +546,7 @@ function revealTryal(game, playerId, payload, rng, at) {
   checkVictory(game, at);
   if (game.status !== GAME_STATUS.FINISHED && game.subPhase !== SUB_PHASE.LAST_WORDS) {
     if (resumeAfter === 'BLACK_CAT') beginDay(game, at);
+    else if (resumeAfter === 'CONSPIRACY_START') beginConspiracy(game, at);
     else if (resumeAfter === 'CONSPIRACY') continueAfterConspiracy(game, rng, at);
     else {
       game.subPhase = SUB_PHASE.PLAY_CARDS;
@@ -466,12 +562,15 @@ function eliminatePlayer(game, playerId, reason) {
   player.deathReason = reason;
   player.wasWitchAnnounced = player.hasEverBeenWitch || player.tryalCards.some((card) => card.type === TRYAL.WITCH);
   player.tryalCards.forEach((card) => { card.revealed = true; });
-  const releasedCards = [...player.hand, ...player.blueCards, ...player.matchmakerCards];
-  game.retiredCards.push(...releasedCards.filter((card) => card.key === 'MATCHMAKER'));
-  game.discard.push(...releasedCards.filter((card) => card.key !== 'MATCHMAKER'));
+  const releasedCards = [...player.hand, ...player.blueCards, ...player.trapCards, ...player.accusations, ...player.matchmakerCards];
+  game.discard.push(...releasedCards);
   player.hand = [];
   player.blueCards = [];
+  player.trapCards = [];
+  player.accusations = [];
+  player.accusationTotal = 0;
   player.matchmakerCards = [];
+  player.hasBlackCat = false;
   game.effects = game.effects.filter((effect) => effect.sourceId !== playerId && effect.targetId !== playerId && !effect.targetIds?.includes(playerId));
   return true;
 }
@@ -496,6 +595,8 @@ function killPlayer(game, playerId, reason, at) {
     announceDeath(game, linkedId, 'MARRIAGE_BOND', at);
     publicEvent(game, 'MARRIAGE_DEATH', `${game.players[linkedId].name} murio inmediatamente por su vinculo con ${player.name}.`, { playerId: linkedId, linkedPlayerId: playerId }, at);
   }
+  syncSpecialCards(game);
+  recalculateMarriages(game, at);
   game.subPhase = SUB_PHASE.LAST_WORDS;
   game.pendingActions = { deceasedId: playerId, resumePhase: game.phase, resumeActions };
   setDecisionTimer(game, at, 20_000);
@@ -515,7 +616,8 @@ function finishLastWords(game, playerId, rng, at) {
     game.timers.phaseEndsAt = null;
     return;
   }
-  if (resumeActions.resumeAfter === 'CONSPIRACY') continueAfterConspiracy(game, rng, at);
+  if (resumeActions.resumeAfter === 'CONSPIRACY_START') beginConspiracy(game, at);
+  else if (resumeActions.resumeAfter === 'CONSPIRACY') continueAfterConspiracy(game, rng, at);
   else if (game.pendingActions.resumePhase === GAME_STATUS.NIGHT) {
     game.pendingActions = resumeActions;
     game.pendingActions.witchVotes ||= {};
@@ -546,8 +648,7 @@ function conspiracySourceId(game, playerId) {
 
 function continueAfterConspiracy(game, rng, at) {
   game.pendingActions = {};
-  if (game.pendingNightAfterDraw) startNight(game, at, game.interruptedTurn);
-  else if (game.interruptedTurn) resumeInterruptedDraw(game, rng, at);
+  if (game.interruptedTurn) resumeInterruptedDraw(game, rng, at);
   else {
     game.subPhase = SUB_PHASE.WAITING_ACTION;
     endTurn(game, at);
@@ -579,16 +680,7 @@ function chooseConspiracyCard(game, playerId, payload, rng, at) {
   });
   recalculateRoles(game, at);
   checkVictory(game, at);
-  if (game.status !== GAME_STATUS.FINISHED) {
-    const blackCatId = alive.find((id) => game.players[id].hasBlackCat
-      && game.players[id].tryalCards.some((card) => !card.revealed));
-    if (blackCatId) {
-      game.subPhase = SUB_PHASE.TRYAL_SELECTION;
-      game.pendingActions = { accusedId: blackCatId, accuserId: blackCatId, resumeAfter: 'CONSPIRACY' };
-      setDecisionTimer(game, at);
-      publicEvent(game, 'BLACK_CAT_REVEAL', `${game.players[blackCatId].name} debe revelar una carta de Juicio por tener el Gato Negro durante Conspiracion.`, { targetId: blackCatId }, at);
-    } else continueAfterConspiracy(game, rng, at);
-  }
+  if (game.status !== GAME_STATUS.FINISHED) continueAfterConspiracy(game, rng, at);
 }
 
 function nextAliveIndex(game) {
@@ -601,13 +693,21 @@ function nextAliveIndex(game) {
 
 function endTurn(game, at) {
   const previousId = game.currentPlayerId;
-  const previousIndex = game.turn.index;
   publicEvent(game, EVENT.TURN_ENDED, `Termino el turno de ${game.players[previousId].name}.`, { playerId: previousId }, at);
-  game.turn.index = nextAliveIndex(game);
-  if (game.turn.index <= previousIndex) game.round += 1;
-  game.turn.number += 1;
+  let previousIndex = game.turn.index;
+  while (true) {
+    game.turn.index = nextAliveIndex(game);
+    if (game.turn.index <= previousIndex) game.round += 1;
+    game.turn.number += 1;
+    game.currentPlayerId = game.turnOrder[game.turn.index];
+    const nextPlayer = game.players[game.currentPlayerId];
+    if (!nextPlayer.trapCards.length) break;
+    const [stocks] = nextPlayer.trapCards.splice(0, 1);
+    game.discard.push(stocks);
+    publicEvent(game, 'TURN_SKIPPED', `${nextPlayer.name} perdio su turno por un Cepo, que fue descartado.`, { playerId: nextPlayer.id, cardId: stocks.id }, at);
+    previousIndex = game.turn.index;
+  }
   game.turn.mode = null;
-  game.currentPlayerId = game.turnOrder[game.turn.index];
   game.subPhase = SUB_PHASE.WAITING_ACTION;
   setDecisionTimer(game, at);
   publicEvent(game, EVENT.TURN_STARTED, `Comenzo el turno de ${game.players[game.currentPlayerId].name}.`, { playerId: game.currentPlayerId }, at);
@@ -690,7 +790,7 @@ function cleanupNight(game, rng, at) {
     game.players[id].blueCards = game.players[id].blueCards.filter((card) => card.duration !== 'UNTIL_END_OF_NIGHT');
   });
   game.pendingActions = {};
-  if (!game.deck.length && game.discard.length) recycleDiscard(game, rng);
+  recycleDiscard(game, rng);
   publicEvent(game, EVENT.NIGHT_ENDED, 'Termino la noche.', {}, at);
   checkVictory(game, at);
   if (game.status !== GAME_STATUS.FINISHED) {
@@ -734,7 +834,12 @@ function validateCommon(game, playerId, action) {
 function applyTimeout(game, playerId, rng, at) {
   assertRule(game.players[playerId], 'NOT_IN_GAME', 'No perteneces a la partida.');
   assertRule(game.timers.phaseEndsAt && at >= game.timers.phaseEndsAt, 'TOO_EARLY', 'La ventana de reconexion sigue abierta.');
-  if (game.subPhase === SUB_PHASE.LAST_WORDS) finishLastWords(game, playerId, rng, at);
+  if (game.phase === GAME_STATUS.DAWN && game.subPhase === 'BLACK_CAT_SELECTION') {
+    const witchId = game.turnOrder.find((id) => game.players[id].alive && game.players[id].isCurrentWitch);
+    const targetId = game.turnOrder.find((id) => game.players[id].alive);
+    selectBlackCat(game, witchId, targetId, at);
+  }
+  else if (game.subPhase === SUB_PHASE.LAST_WORDS) finishLastWords(game, playerId, rng, at);
   else if (game.subPhase === SUB_PHASE.WITCH_SELECTION) {
     const targets = game.turnOrder.filter((id) => game.players[id].alive && !game.players[id].hasEverBeenWitch);
     game.turnOrder.filter((id) => game.players[id].alive && game.players[id].hasEverBeenWitch && !game.pendingActions.witchVotes[id])
@@ -801,7 +906,8 @@ function publicPlayer(player) {
     revealedTryalCards: player.tryalCards.filter((card) => card.revealed).map(({ id, type, revealed }) => ({ id, type, revealed })),
     blueCards: player.blueCards, accusations: player.accusations, accusationTotal: player.accusationTotal,
     hasBlackCat: player.hasBlackCat, canCommunicate: player.canCommunicate, deathReason: player.deathReason,
-    matchmakerCardCount: player.matchmakerCards.length, marriedTo: player.marriedTo,
+    trapCardCount: player.trapCards.length,
+    matchmakerCardCount: player.blueCards.filter((card) => card.key === 'MATCHMAKER').length, marriedTo: player.marriedTo,
     wasEverWitch: player.alive ? undefined : player.wasWitchAnnounced,
   };
 }
@@ -839,7 +945,7 @@ function buildPublicPendingAction(game) {
   if (game.subPhase === SUB_PHASE.TRYAL_SELECTION) return {
     accusedId: game.pendingActions.accusedId,
     accuserId: game.pendingActions.accuserId,
-    reason: game.pendingActions.resumeAfter === 'CONSPIRACY' ? 'BLACK_CAT' : game.pendingActions.resumeAfter || 'ACCUSATION',
+    reason: ['CONSPIRACY', 'CONSPIRACY_START'].includes(game.pendingActions.resumeAfter) ? 'BLACK_CAT' : game.pendingActions.resumeAfter || 'ACCUSATION',
   };
   if (game.subPhase === SUB_PHASE.LAST_WORDS) return { deceasedId: game.pendingActions.deceasedId };
   return null;
@@ -851,7 +957,7 @@ function legalActionsFor(game, playerId) {
   if (!player.alive) return game.subPhase === SUB_PHASE.LAST_WORDS && game.pendingActions.deceasedId === playerId ? [{ type: ACTION.SUBMIT_LAST_WORDS }, { type: ACTION.END_LAST_WORDS }] : [];
   if (game.phase === GAME_STATUS.LOBBY && player.isHost) return [{ type: ACTION.START_GAME }];
   if (game.phase === GAME_STATUS.DAWN && game.subPhase === 'BLACK_CAT_SELECTION' && player.alive && player.isCurrentWitch) {
-    return [{ type: ACTION.SELECT_BLACK_CAT, targets: game.turnOrder.filter((id) => game.players[id].alive && id !== playerId) }];
+    return [{ type: ACTION.SELECT_BLACK_CAT, targets: game.turnOrder.filter((id) => game.players[id].alive) }];
   }
   if (game.subPhase === SUB_PHASE.TRYAL_SELECTION && game.pendingActions.accuserId === playerId) {
     const accused = game.players[game.pendingActions.accusedId];
@@ -875,7 +981,17 @@ function legalActionsFor(game, playerId) {
         ...game.players[playerId].hand.filter((card) => card.trigger === 'ON_PLAY').flatMap((card) => {
           const targets = validTargets(game, playerId, card);
           const targetCount = card.targetCount || (card.targetRules === 'NONE' ? 0 : 1);
-          return targets.length >= targetCount ? [{ type: ACTION.PLAY_CARD, cardId: card.id, targets, targetCount }] : [];
+          if (targets.length < targetCount) return [];
+          const option = { type: ACTION.PLAY_CARD, cardId: card.id, targets, targetCount };
+          if (card.key === 'ALIBI') option.accusationOptions = Object.fromEntries(targets.map((id) => [id, game.players[id].accusations
+            .filter((accusation) => (accusation.points || 0) <= 3)
+            .map((accusation) => ({ id: accusation.id || accusation.cardId, name: accusation.name || 'Acusacion', points: accusation.points || 0 }))]));
+          if (card.key === 'CURSE') option.blueCardOptions = Object.fromEntries(targets.map((id) => [id, game.players[id].blueCards
+            .map((blueCard) => ({ id: blueCard.id, name: blueCard.name }))]));
+          if (card.key === 'SCAPEGOAT') option.sourceTargets = targets.filter((id) => frontCardCount(game.players[id]) > 0);
+          if (card.key === 'SCAPEGOAT' && option.sourceTargets.length === 0) return [];
+          if (['ROBBERY', 'SCAPEGOAT'].includes(card.key)) option.orderedTargets = true;
+          return [option];
         }),
         ...(game.turn.mode === 'PLAY' ? [{ type: ACTION.END_TURN }] : []),
       ];

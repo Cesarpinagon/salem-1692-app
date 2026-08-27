@@ -34,7 +34,7 @@ Las cartas de Juicio permanecen ocultas en el teléfono de su propietario:
 - **Pueblerino:** indica que esa carta no es de Bruja.
 - **Alguacil:** permite proteger secretamente a una persona durante la Noche.
 
-En una partida de cuatro personas, cada jugador comienza con cinco cartas de Juicio. En partidas de cinco a doce personas, cada jugador comienza con cuatro. En toda la partida existe una carta de Bruja y una de Alguacil; las demás son de Pueblerino.
+Las cartas de Juicio son independientes de la mano de juego. Cada jugador recibe cinco cartas de Juicio con 4 a 7 participantes, cuatro con 8 o 9, y tres con 10 a 12. En toda la partida existe una carta de Bruja y una de Alguacil; las demás son de Pueblerino.
 
 Las cartas pueden cambiar de propietario debido a Conspiración, por lo que las identidades pueden cambiar durante la partida.
 
@@ -43,11 +43,15 @@ Las cartas pueden cambiar de propietario debido a Conspiración, por lo que las 
 Al comenzar la partida se muestra una fase privada de Amanecer:
 
 1. La Bruja inicial descubre su identidad.
-2. La Bruja elige a otro jugador para entregarle el **Gato Negro**.
+2. La Bruja elige qué jugador recibe la carta azul **Gato Negro**, que se coloca boca arriba frente a él.
 3. La asignación no revela ninguna carta de Juicio en ese momento.
 4. Después comienza el primer turno del Día.
 
 ## 5. Turnos durante el Día
+
+Antes del Amanecer, cada jugador recibe exactamente tres cartas jugables. Gato Negro, Conspiración y Noche nunca forman parte de estas manos iniciales.
+
+El mazo estándar tiene 59 cartas: 35 Acusación, 5 Evidencia, 1 Testigo, 3 Coartada, 1 Incendio, 1 Maldición, 1 Robo, 2 Chivo Expiatorio, 3 Cepo, 1 Asilo, 1 Piedad, 2 Casamentero, 1 Gato Negro, 1 Conspiración y 1 Noche.
 
 En su turno, un jugador elige entre:
 
@@ -66,18 +70,26 @@ Los puntos se colocan frente al jugador objetivo. Cuando llega a **7 o más punt
 
 ### Cartas verdes
 
-- **Coartada:** se juega sobre otro jugador y retira hasta 3 cartas rojas acumuladas frente a él. Después va a la pila de descarte. Nunca puede jugarse sobre uno mismo.
-- **Casamiento:** existen exactamente dos cartas. Cada carta se asigna a un solo jugador vivo que todavía no tenga una carta de Casamiento. Después de aparecer una vez, no regresa al mazo al reciclar el descarte tras la Noche.
+- **Coartada ×3:** retira cartas rojas elegidas que sumen como máximo 3 puntos, no tres cartas arbitrarias.
+- **Incendio ×1:** descarta toda la mano de otro jugador sin tocar las cartas situadas frente a él.
+- **Maldición ×1:** descarta una carta azul elegida frente a otro jugador.
+- **Robo ×1:** mueve toda la mano de otro jugador a un tercer jugador; quien juega Robo no puede ser origen ni destino.
+- **Chivo Expiatorio ×2:** mueve el conjunto completo de cartas frente a otro jugador hacia un tercero; quien juega la carta no puede ser origen ni destino.
+- **Cepo ×3:** hace perder el siguiente turno y después se descarta. Varios Cepos hacen perder turnos consecutivos.
 
-### Carta azul
+### Cartas azules
 
-- **Asilo / Protección:** existe exactamente una carta en todo el mazo. Se juega boca arriba frente a otro jugador y permanece protegiéndolo del ataque de las Brujas durante la Noche. No evita que reciba acusaciones durante el Día y nunca puede jugarse sobre uno mismo.
+- **Asilo ×1:** protege únicamente del asesinato nocturno de las Brujas.
+- **Piedad ×1:** impide que se jueguen directamente cartas rojas contra su portador.
+- **Casamentero ×2:** dos portadores distintos quedan vinculados mortalmente. Si ambas cartas terminan frente a la misma persona, las dos se descartan.
+- **Gato Negro ×1:** se asigna durante el Amanecer y después funciona como cualquier carta azul; puede moverse, descartarse, reciclarse, robarse y volver a jugarse.
 
-### Carta negra
+### Cartas negras
 
-- **Conspiración:** existe una sola carta y nunca se reparte en las manos iniciales. Permanece en el mazo; al robarla, cada jugador vivo elige una carta de Juicio oculta del jugador que está a su izquierda. Todas las transferencias se aplican simultáneamente. Después de la Noche, Conspiración vuelve al mazo para el siguiente ciclo.
+- **Conspiración ×1:** nunca se reparte inicialmente. Primero el portador del Gato Negro revela una carta de Juicio y después cada jugador vivo elige una carta oculta del jugador de su izquierda. Todas las transferencias se aplican simultáneamente.
+- **Noche ×1:** nunca se reparte inicialmente y se coloca al fondo del mazo. Al robarse inicia inmediatamente la Noche.
 
-La pantalla indica de quién se está tomando la carta y pide confirmar la selección. Después de la transferencia, cada jugador ve privadamente qué carta recibió. Cuando termina la Conspiración, quien tenga el **Gato Negro** debe revelar una de sus cartas de Juicio; solo entonces se activa su efecto.
+La pantalla indica de quién se está tomando la carta y pide confirmar la selección. Después de la transferencia, cada jugador ve privadamente qué carta recibió.
 
 ## 6. Acusaciones y Juicio
 
@@ -91,9 +103,7 @@ Cuando un jugador llega a 7 puntos de acusación:
 
 ## 7. Cuándo comienza la Noche
 
-La Noche **no** depende de robar una carta especial. Comienza automáticamente y una sola vez cuando un jugador roba la **última carta del mazo principal**.
-
-Si esa última carta es Conspiración, primero se resuelven todas las transferencias privadas y después comienza la Noche. Si quedaba pendiente el segundo robo del turno, la aplicación conserva esa acción y la reanuda cuando termina la resolución nocturna, siempre que el jugador siga con vida.
+La Noche comienza cuando se roba la carta negra **Noche**, colocada al fondo durante la preparación. Si queda pendiente el segundo robo, se reanuda después de la resolución nocturna siempre que el jugador siga con vida. Al terminar la Noche, las cartas del descarte se barajan para reconstruir el mazo y Noche vuelve a colocarse al fondo.
 
 ## 8. Resolución de la Noche
 
@@ -106,14 +116,15 @@ La aplicación guía las decisiones en este orden:
 
 Una confesión válida protege al jugador durante esa Noche. Revelar una carta de Bruja al confesar provoca la muerte inmediata. El ataque nocturno falla si la víctima fue protegida por el Alguacil, confesó o tiene Asilo.
 
-## 9. Casamiento y muerte compartida
+## 9. Casamentero y muerte compartida
 
-La primera carta de Casamiento se coloca frente a un jugador, pero todavía no crea ningún vínculo. Cuando la segunda carta se asigna a otro jugador distinto, ambos quedan casados y se activa el vínculo mortal:
+La primera carta de Casamentero se coloca frente a un jugador, pero todavía no crea ningún vínculo. Cuando la segunda queda frente a otro jugador distinto, ambos quedan vinculados:
 
 - Una sola carta asignada no produce muerte compartida.
 - Si uno muere por revelar una Bruja, perder todas sus cartas de Juicio, un ataque nocturno o cualquier otro efecto, el otro muere inmediatamente.
 - La muerte vinculada ocurre en el mismo momento y no puede evitarse con Asilo ni con la protección del Alguacil.
 - El vínculo aparece públicamente en el tablero junto a los nombres de los jugadores.
+- Si las dos cartas terminan frente al mismo jugador, ambas se descartan y no existe vínculo.
 
 ## 10. Muerte, anuncio y últimas palabras
 
