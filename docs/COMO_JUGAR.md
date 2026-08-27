@@ -71,7 +71,7 @@ Los puntos se colocan frente al jugador objetivo. Cuando llega a **7 o más punt
 
 ### Carta azul
 
-- **Asilo / Protección:** existe exactamente una carta en todo el mazo. Se juega boca arriba frente a otro jugador y permanece protegiéndolo de nuevas acusaciones y de ataques de las Brujas durante la Noche. Nunca puede jugarse sobre uno mismo.
+- **Asilo / Protección:** existe exactamente una carta en todo el mazo. Se juega boca arriba frente a otro jugador y permanece protegiéndolo del ataque de las Brujas durante la Noche. No evita que reciba acusaciones durante el Día y nunca puede jugarse sobre uno mismo.
 
 ### Carta negra
 

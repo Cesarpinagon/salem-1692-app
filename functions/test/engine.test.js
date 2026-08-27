@@ -375,15 +375,18 @@ test('Casamiento requiere asignar sus dos cartas a personas distintas antes de a
   assert.ok(game.history.some((entry) => entry.type === 'MARRIAGE_DEATH'));
 });
 
-test('Asilo es permanente y bloquea acusaciones contra quien lo posee', () => {
+test('Asilo no bloquea acusaciones durante el dia aunque sea el unico objetivo disponible', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   const target = game.turnOrder.find((id) => id !== actor);
+  game.turnOrder.filter((id) => ![actor, target].includes(id)).forEach((id) => { game.players[id].alive = false; });
   game.players[target].blueCards.push({ id: 'asylum_test', key: 'ASYLUM', name: 'Asilo / Proteccion', color: 'BLUE', duration: 'PERMANENT' });
-  game.players[actor].hand.unshift({ id: 'accusation_blocked', key: 'ACCUSATION', name: 'Acusacion', color: 'RED', points: 1, trigger: 'ON_PLAY', targetRules: 'OTHER_PLAYER' });
-  const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'accusation_blocked');
-  assert.ok(!action.targets.includes(target));
-  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: 'accusation_blocked', targetId: target }), (error) => error.code === 'INVALID_TARGET');
+  game.players[actor].hand.unshift({ id: 'accusation_allowed', key: 'ACCUSATION', name: 'Acusacion', color: 'RED', points: 1, trigger: 'ON_PLAY', targetRules: 'OTHER_PLAYER' });
+  const action = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === 'accusation_allowed');
+  assert.deepEqual(action.targets, [target]);
+
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'accusation_allowed', targetId: target });
+  assert.equal(game.players[target].accusationTotal, 1);
   assert.equal(game.players[target].blueCards[0].duration, 'PERMANENT');
 });
 

@@ -38,8 +38,8 @@ export const cardDescription = (card) => card?.description || ({
   EVIDENCE: 'Suma 3 puntos de acusacion frente a otro jugador.',
   WITNESS: 'Suma 7 puntos de acusacion y provoca un Juicio.',
   ALIBI: 'Retira hasta 3 cartas de acusacion de otro jugador.',
-  ASYLUM: 'Protege permanentemente a otro jugador contra acusaciones y ataques de la Noche.',
-  SANCTUARY: 'Proteccion azul permanente contra acusaciones y ataques de la Noche.',
+  ASYLUM: 'Protege permanentemente a otro jugador del ataque de las Brujas durante la Noche.',
+  SANCTUARY: 'Proteccion azul permanente contra el ataque de las Brujas durante la Noche.',
   MATCHMAKER: 'Asigna la carta a una persona. Cuando dos personas distintas tengan una, quedaran casadas y compartiran un vinculo mortal. No vuelve al mazo.',
 }[card?.key] || 'Carta de Salem.');
 
@@ -50,6 +50,6 @@ export const CARD_GLOSSARY = [
   { name: 'Gato Negro', description: 'Al terminar una Conspiracion, obliga a quien lo tenga a revelar una carta de Juicio. Asignarlo al inicio no revela ninguna carta.' },
   { name: 'Conspiracion', description: 'Carta unica que nunca se reparte. Cada jugador toma una carta de Juicio oculta del jugador a su izquierda y la carta vuelve al mazo despues de la Noche.' },
   { name: 'Coartada', description: 'Retira hasta 3 cartas de acusacion acumuladas frente a otro jugador y luego va al descarte.' },
-  { name: 'Asilo / Proteccion', description: 'Hay una sola carta en toda la partida. Se coloca frente a otro jugador y lo protege permanentemente contra acusaciones y ataques de la Noche.' },
+  { name: 'Asilo / Proteccion', description: 'Hay una sola carta en toda la partida. Se coloca frente a otro jugador y lo protege permanentemente del ataque nocturno de las Brujas; no impide acusarlo durante el dia.' },
   { name: 'Acusaciones', description: 'Las cartas rojas suman puntos frente a un jugador; al llegar a 7 provocan un Juicio.' },
 ];

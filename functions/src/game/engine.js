@@ -13,7 +13,7 @@ export function hydrateGameState(gameInput) {
     if (!card || !['ALIBI', 'ASYLUM'].includes(card.key)) return card;
     card.targetRules = 'OTHER_PLAYER';
     if (card.key === 'ALIBI') card.description = 'Retira hasta 3 cartas de acusacion de otro jugador.';
-    if (card.key === 'ASYLUM') card.description = 'Protege permanentemente a otro jugador contra acusaciones y ataques de la Noche.';
+    if (card.key === 'ASYLUM') card.description = 'Protege permanentemente a otro jugador del ataque de las Brujas durante la Noche.';
     return card;
   };
   const arrayFields = ['deck', 'discard', 'retiredCards', 'effects', 'history', 'events', 'internalLog', 'randomAudit', 'turnOrder'];
@@ -276,7 +276,7 @@ function selectBlackCat(game, playerId, targetId, at) {
 
 function validTargets(game, playerId, card) {
   const alive = game.turnOrder.filter((id) => game.players[id].alive
-    && (card.color !== CARD_COLOR.RED || (game.players[id].tryalCards.some((tryal) => !tryal.revealed) && !hasAsylum(game.players[id]))));
+    && (card.color !== CARD_COLOR.RED || game.players[id].tryalCards.some((tryal) => !tryal.revealed)));
   if (card.key === 'MATCHMAKER') return alive.filter((id) => !game.players[id].marriedTo && game.players[id].matchmakerCards.length === 0);
   if (card.targetRules === 'SELF') return [playerId];
   if (card.targetRules === 'OTHER_PLAYER') return alive.filter((id) => id !== playerId);
