@@ -75,7 +75,7 @@ Los puntos se colocan frente al jugador objetivo. Cuando llega a **7 o más punt
 
 ### Carta negra
 
-- **Conspiración:** existe una sola carta en el mazo. Al robarla, cada jugador vivo elige una carta de Juicio oculta del jugador que está a su izquierda. Todas las transferencias se aplican simultáneamente.
+- **Conspiración:** existe una sola carta y nunca se reparte en las manos iniciales. Permanece en el mazo; al robarla, cada jugador vivo elige una carta de Juicio oculta del jugador que está a su izquierda. Todas las transferencias se aplican simultáneamente. Después de la Noche, Conspiración vuelve al mazo para el siguiente ciclo.
 
 La pantalla indica de quién se está tomando la carta y pide confirmar la selección. Después de la transferencia, cada jugador ve privadamente qué carta recibió. Cuando termina la Conspiración, quien tenga el **Gato Negro** debe revelar una de sus cartas de Juicio; solo entonces se activa su efecto.
 

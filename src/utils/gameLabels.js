@@ -48,7 +48,7 @@ export const CARD_GLOSSARY = [
   { name: 'Amanecer', description: 'Permite al Alguacil proteger secretamente a un jugador del ataque nocturno de las Brujas.' },
   { name: 'Noche', description: 'La fase comienza automaticamente cuando un jugador roba la ultima carta del mazo principal.' },
   { name: 'Gato Negro', description: 'Al terminar una Conspiracion, obliga a quien lo tenga a revelar una carta de Juicio. Asignarlo al inicio no revela ninguna carta.' },
-  { name: 'Conspiracion', description: 'Cada jugador toma una carta de Juicio oculta del jugador a su izquierda. Recibir una Bruja te convierte en Bruja.' },
+  { name: 'Conspiracion', description: 'Carta unica que nunca se reparte. Cada jugador toma una carta de Juicio oculta del jugador a su izquierda y la carta vuelve al mazo despues de la Noche.' },
   { name: 'Asilo / Proteccion', description: 'Carta azul permanente que protege contra acusaciones y ataques de la Noche.' },
   { name: 'Acusaciones', description: 'Las cartas rojas suman puntos frente a un jugador; al llegar a 7 provocan un Juicio.' },
 ];

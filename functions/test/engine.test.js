@@ -159,6 +159,44 @@ test('el mazo contiene exactamente una Conspiracion y dos cartas de Casamiento',
   }
 });
 
+test('Conspiracion nunca se reparte y permanece como carta unica del mazo', () => {
+  for (const playerCount of [4, 8, 12]) {
+    let game = GameEngine.createGame({ id: `DECK_${playerCount}`, inviteCode: `D${playerCount}TEST`, host: { id: 'p1', firebaseUid: 'u1', name: 'Host' }, now: 1 });
+    for (let n = 2; n <= playerCount; n += 1) game = GameEngine.addPlayer(game, { id: `p${n}`, firebaseUid: `u${n}`, name: `Player ${n}` }, n);
+    game = act(game, 'p1', ACTION.START_GAME, {}, `players_${playerCount}`);
+    assert.ok(game.turnOrder.every((id) => game.players[id].hand.every((card) => card.key !== 'CONSPIRACY')));
+    assert.equal(game.deck.filter((card) => card.key === 'CONSPIRACY').length, 1);
+  }
+});
+
+test('una partida anterior recupera Conspiracion si habia quedado en una mano', () => {
+  const game = started();
+  const owner = game.turnOrder[0];
+  const conspiracy = game.deck.find((card) => card.key === 'CONSPIRACY');
+  game.deck = game.deck.filter((card) => card.id !== conspiracy.id);
+  game.players[owner].hand.push(conspiracy);
+  const previousDeckCount = game.deck.length;
+  const view = GameEngine.buildPlayerView(game, owner);
+  assert.ok(view.privateState.hand.every((card) => card.key !== 'CONSPIRACY'));
+  assert.equal(view.publicState.deckCount, previousDeckCount + 1);
+});
+
+test('Conspiracion vuelve una sola vez al mazo al terminar la Noche', () => {
+  let game = beginDay(started());
+  const conspiracy = game.deck.find((card) => card.key === 'CONSPIRACY');
+  game.deck = [];
+  game.discard = [conspiracy];
+  game.status = GAME_STATUS.NIGHT;
+  game.phase = GAME_STATUS.NIGHT;
+  game.subPhase = SUB_PHASE.CONFESSION;
+  game.pendingActions = { witchVotes: {}, protection: null, confessions: {}, confessionResponses: {} };
+  for (const id of game.turnOrder.filter((playerId) => game.players[playerId].alive)) {
+    game = act(game, id, ACTION.PASS_CONFESSION, {}, `recycle_${id}`);
+  }
+  assert.equal(game.deck.filter((card) => card.key === 'CONSPIRACY').length, 1);
+  assert.equal(game.discard.filter((card) => card.key === 'CONSPIRACY').length, 0);
+});
+
 test('la Noche no comienza mientras queden cartas en el mazo principal', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;

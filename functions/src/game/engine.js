@@ -23,6 +23,7 @@ export function hydrateGameState(gameInput) {
   game.nextEventId ??= 1;
   game.interruptedTurn ||= null;
   game.pendingNightAfterDraw ??= false;
+  const conspiracyInLegacyHands = [];
   Object.values(game.players).forEach((player) => {
     ['hand', 'tryalCards', 'blueCards', 'matchmakerCards', 'accusations', 'secretInformation'].forEach((field) => {
       player[field] = Array.isArray(player[field]) ? player[field] : [];
@@ -40,7 +41,11 @@ export function hydrateGameState(gameInput) {
     player.marriedTo ??= null;
     player.lastConspiracyCard ??= null;
     player.wasWitchAnnounced ??= false;
+    conspiracyInLegacyHands.push(...player.hand.filter((card) => card.key === 'CONSPIRACY'));
+    player.hand = player.hand.filter((card) => card.key !== 'CONSPIRACY');
   });
+  const conspiracyAlreadyInCycle = [...game.deck, ...game.discard].some((card) => card.key === 'CONSPIRACY');
+  if (!conspiracyAlreadyInCycle && conspiracyInLegacyHands.length) game.deck.push(conspiracyInLegacyHands[0]);
   return game;
 }
 
@@ -171,9 +176,12 @@ function startGame(game, playerId, rng, at) {
       limitations: [],
     };
   });
-  game.deck = shuffled(buildTownDeck(game.turnOrder.length), rng, game.randomAudit);
+  const completeDeck = buildTownDeck(game.turnOrder.length);
+  const conspiracy = completeDeck.find((card) => card.key === 'CONSPIRACY');
+  game.deck = shuffled(completeDeck.filter((card) => card.key !== 'CONSPIRACY'), rng, game.randomAudit);
   game.turnOrder.forEach((id) => { game.players[id].hand = game.deck.splice(0, 5); });
   assertRule(game.turnOrder.every((id) => game.players[id].hand.length === 5), 'DECK_TOO_SMALL', 'El mazo no alcanzo para repartir las manos iniciales.');
+  game.deck = shuffled([...game.deck, conspiracy], rng, game.randomAudit);
   game.status = GAME_STATUS.DAWN;
   game.phase = GAME_STATUS.DAWN;
   game.subPhase = 'BLACK_CAT_SELECTION';
@@ -660,6 +668,7 @@ function cleanupNight(game, rng, at) {
     game.players[id].blueCards = game.players[id].blueCards.filter((card) => card.duration !== 'UNTIL_END_OF_NIGHT');
   });
   game.pendingActions = {};
+  if (!game.deck.length && game.discard.length) recycleDiscard(game, rng);
   publicEvent(game, EVENT.NIGHT_ENDED, 'Termino la noche.', {}, at);
   checkVictory(game, at);
   if (game.status !== GAME_STATUS.FINISHED) {
