@@ -194,15 +194,72 @@ test('si la ultima carta es Conspiracion, se resuelve antes de comenzar la Noche
   assert.equal(game.history.filter((entry) => entry.type === 'NIGHT_STARTED').length, 1);
 });
 
-test('Casamiento vincula dos jugadores y la muerte de uno elimina inmediatamente al otro', () => {
+test('las cartas de Casamiento no vuelven al mazo cuando se recicla el descarte', () => {
+  let game = beginDay(started());
+  const actor = game.currentPlayerId;
+  const definition = buildTownDeck(4).find((card) => card.key === 'MATCHMAKER');
+  const spentIds = ['spent_matchmaker_1', 'spent_matchmaker_2'];
+  game.deck = [];
+  game.discard = [
+    { ...definition, id: spentIds[0] },
+    { id: 'reusable_1', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+    { ...definition, id: spentIds[1] },
+    { id: 'reusable_2', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+    { id: 'reusable_3', key: 'ALIBI', name: 'Coartada', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'SELF' },
+  ];
+
+  game = act(game, actor, ACTION.DRAW_CARDS);
+
+  assert.ok(spentIds.every((id) => game.retiredCards.some((card) => card.id === id)));
+  assert.ok(!game.deck.some((card) => card.key === 'MATCHMAKER'));
+  assert.ok(!game.players[actor].hand.some((card) => spentIds.includes(card.id)));
+  assert.equal(game.deck.length, 1);
+});
+
+test('Casamiento requiere asignar sus dos cartas a personas distintas antes de activar el vinculo mortal', () => {
   let game = beginDay(started());
   const actor = game.currentPlayerId;
   const witch = game.turnOrder.find((id) => game.players[id].tryalCards.some((card) => card.type === TRYAL.WITCH && !card.revealed));
   const partner = game.turnOrder.find((id) => id !== witch);
-  game.players[actor].hand.unshift({ id: 'matchmaker_test', key: 'MATCHMAKER', name: 'Casamiento', color: 'GREEN', trigger: 'ON_PLAY', targetRules: 'TWO_ALIVE_PLAYERS', targetCount: 2 });
-  game = act(game, actor, ACTION.PLAY_CARD, { cardId: 'matchmaker_test', targetIds: [witch, partner] });
+  const definition = buildTownDeck(4).find((card) => card.key === 'MATCHMAKER');
+  const firstCard = { ...definition, id: 'matchmaker_test_1' };
+  const secondCard = { ...definition, id: 'matchmaker_test_2' };
+  game.players[actor].hand.unshift(firstCard, secondCard);
+
+  const firstAction = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === firstCard.id);
+  assert.equal(firstAction.targetCount, 1);
+  assert.ok(firstAction.targets.includes(witch));
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: firstCard.id, targetId: witch });
+
+  assert.equal(game.players[witch].matchmakerCards.length, 1);
+  assert.equal(game.players[witch].marriedTo, null);
+  assert.equal(game.players[partner].marriedTo, null);
+  assert.equal(game.history.filter((entry) => entry.type === 'MARRIAGE_CARD_ASSIGNED').length, 1);
+  assert.equal(game.history.filter((entry) => entry.type === 'MARRIAGE_CREATED').length, 0);
+  assert.ok(!game.discard.some((card) => card.id === firstCard.id));
+
+  const secondAction = GameEngine.buildPlayerView(game, actor).privateState.legalActions.find((item) => item.cardId === secondCard.id);
+  assert.equal(secondAction.targetCount, 1);
+  assert.ok(!secondAction.targets.includes(witch));
+  assert.ok(secondAction.targets.includes(partner));
+  assert.throws(() => act(game, actor, ACTION.PLAY_CARD, { cardId: secondCard.id, targetId: witch }), (error) => error.code === 'INVALID_TARGET');
+
+  const beforeMarriage = structuredClone(game);
+  beforeMarriage.subPhase = SUB_PHASE.TRYAL_SELECTION;
+  beforeMarriage.pendingActions = { accusedId: witch, accuserId: actor };
+  const pendingWitchCard = beforeMarriage.players[witch].tryalCards.find((card) => card.type === TRYAL.WITCH && !card.revealed);
+  const deathBeforeMarriage = act(beforeMarriage, actor, ACTION.SELECT_TRYAL, { targetId: witch, tryalCardId: pendingWitchCard.id }, 'before_marriage');
+  assert.equal(deathBeforeMarriage.players[witch].alive, false);
+  assert.equal(deathBeforeMarriage.players[partner].alive, true);
+  assert.ok(deathBeforeMarriage.retiredCards.some((card) => card.id === firstCard.id));
+  assert.ok(!deathBeforeMarriage.discard.some((card) => card.id === firstCard.id));
+
+  game = act(game, actor, ACTION.PLAY_CARD, { cardId: secondCard.id, targetId: partner });
   assert.equal(game.players[witch].marriedTo, partner);
   assert.equal(game.players[partner].marriedTo, witch);
+  assert.equal(game.players[partner].matchmakerCards.length, 1);
+  assert.equal(game.history.filter((entry) => entry.type === 'MARRIAGE_CREATED').length, 1);
+  assert.equal(GameEngine.buildPlayerView(game, partner).publicState.players[witch].matchmakerCardCount, 1);
 
   game.subPhase = SUB_PHASE.TRYAL_SELECTION;
   game.pendingActions = { accusedId: witch, accuserId: actor };

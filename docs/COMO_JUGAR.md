@@ -67,7 +67,7 @@ Los puntos se colocan frente al jugador objetivo. Cuando llega a **7 o más punt
 ### Cartas verdes
 
 - **Coartada:** elimina todas las acusaciones acumuladas por quien la juega.
-- **Casamiento:** vincula a dos jugadores vivos que todavía no estén vinculados. Existen exactamente dos cartas de Casamiento en el mazo.
+- **Casamiento:** existen exactamente dos cartas. Cada carta se asigna a un solo jugador vivo que todavía no tenga una carta de Casamiento. Después de aparecer una vez, no regresa al mazo al reciclar el descarte tras la Noche.
 
 ### Carta azul
 
@@ -108,8 +108,9 @@ Una confesión válida protege al jugador durante esa Noche. Revelar una carta d
 
 ## 9. Casamiento y muerte compartida
 
-Los dos jugadores vinculados por Casamiento comparten un vínculo mortal:
+La primera carta de Casamiento se coloca frente a un jugador, pero todavía no crea ningún vínculo. Cuando la segunda carta se asigna a otro jugador distinto, ambos quedan casados y se activa el vínculo mortal:
 
+- Una sola carta asignada no produce muerte compartida.
 - Si uno muere por revelar una Bruja, perder todas sus cartas de Juicio, un ataque nocturno o cualquier otro efecto, el otro muere inmediatamente.
 - La muerte vinculada ocurre en el mismo momento y no puede evitarse con Asilo ni con la protección del Alguacil.
 - El vínculo aparece públicamente en el tablero junto a los nombres de los jugadores.
